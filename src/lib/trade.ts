@@ -16,7 +16,7 @@ import {
   VersionedTransaction,
   Transaction,
 } from '@solana/web3.js'
-import { PUMPPORTAL_TRADE_URL } from '../config'
+import { BUILD_TIMEOUT_MS, PUMPPORTAL_TRADE_URL } from '../config'
 import type { Pool } from '../types'
 
 export type TradeAction = 'buy' | 'sell'
@@ -77,6 +77,9 @@ async function buildTx(
       }),
     })
   } catch (e) {
+    if ((e as Error).name === 'AbortError') {
+      throw new TradeError('trade-local build timed out', 'build')
+    }
     throw new TradeError(
       `network error building tx: ${(e as Error).message}`,
       'build',
@@ -106,16 +109,32 @@ async function buildTx(
 /**
  * Execute a trade end to end. `connection` is reused (already warm) so we skip
  * connection setup latency on the hot path.
+ *
+ * The build request is hard-bounded by `buildTimeoutMs` so a hung PumpPortal
+ * request can never stall the trade and leak the caller's in-flight guard.
  */
 export async function executeTrade(
   params: TradeParams,
   sign: SignFn,
   connection: Connection,
   signal?: AbortSignal,
+  buildTimeoutMs = BUILD_TIMEOUT_MS,
 ): Promise<TradeResult> {
   const t0 = performance.now()
 
-  const tx = await buildTx(params, signal)
+  // Bound the build phase with our own controller, chained to any caller signal.
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), buildTimeoutMs)
+  if (signal) {
+    if (signal.aborted) ac.abort()
+    else signal.addEventListener('abort', () => ac.abort(), { once: true })
+  }
+  let tx: VersionedTransaction
+  try {
+    tx = await buildTx(params, ac.signal)
+  } finally {
+    clearTimeout(timer)
+  }
 
   let signed: VersionedTransaction | Transaction
   try {
@@ -140,34 +159,61 @@ export async function executeTrade(
 }
 
 /**
- * Best-effort confirmation without blocking the hot path. Resolves to true if
- * the tx is confirmed within `timeoutMs`, false otherwise (never throws).
+ * Confirmation outcome. `timeout` is deliberately distinct from `failed`:
+ * a Solana tx stays valid until its blockhash expires, so a buy that hasn't
+ * confirmed within the window may still land — callers must NOT treat a timeout
+ * as a definitive failure (that would orphan a real position).
+ */
+export type ConfirmResult = 'confirmed' | 'failed' | 'timeout'
+
+/**
+ * Confirm a signature, racing the WebSocket `onSignature` push (fires the
+ * instant the cluster confirms) against an HTTP poll fallback. Never throws.
  */
 export async function confirmSignature(
   connection: Connection,
   signature: string,
   timeoutMs = 30000,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
+): Promise<ConfirmResult> {
+  // Fast path: WS push. Only ever resolves on a real notification, so it never
+  // beats the poll on a subscription error.
+  const wsPush = new Promise<ConfirmResult>((resolve) => {
     try {
-      const st = await connection.getSignatureStatuses([signature])
-      const s = st.value[0]
-      if (s) {
-        if (s.err) return false
-        if (
-          s.confirmationStatus === 'confirmed' ||
-          s.confirmationStatus === 'finalized'
-        ) {
-          return true
-        }
-      }
+      connection.onSignature(
+        signature,
+        (res) => resolve(res.err ? 'failed' : 'confirmed'),
+        'confirmed',
+      )
     } catch {
-      /* keep polling */
+      /* leave resolution to the poll fallback */
     }
-    await new Promise((r) => setTimeout(r, 1200))
-  }
-  return false
+  })
+
+  // Fallback: poll loop, also covers subscribing after the tx already confirmed.
+  const poll = (async (): Promise<ConfirmResult> => {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      try {
+        const st = await connection.getSignatureStatuses([signature])
+        const s = st.value[0]
+        if (s) {
+          if (s.err) return 'failed'
+          if (
+            s.confirmationStatus === 'confirmed' ||
+            s.confirmationStatus === 'finalized'
+          ) {
+            return 'confirmed'
+          }
+        }
+      } catch {
+        /* keep polling */
+      }
+      await new Promise((r) => setTimeout(r, 1200))
+    }
+    return 'timeout'
+  })()
+
+  return Promise.race([wsPush, poll])
 }
 
 export { TradeError }

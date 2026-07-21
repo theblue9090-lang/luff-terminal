@@ -4,19 +4,25 @@
 // Wires the two detection feeds (PumpPortal WS + DexScreener poll) to the store,
 // runs auto-snipe evaluation on qualifying new tokens, streams live prices for
 // held mints, and enforces take-profit / stop-loss. All trades are signed by the
-// Privy embedded wallet and broadcast through one warm RPC connection.
+// Privy embedded wallet WITHOUT a confirmation modal (showWalletUIs:false) and
+// broadcast through one warm RPC connection.
 // -----------------------------------------------------------------------------
 
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Connection, PublicKey } from '@solana/web3.js'
 import { useSolanaWallets, useSignTransaction } from '@privy-io/react-auth/solana'
-import { RPC_ENDPOINT, RPC_WS_ENDPOINT, type SnipeConfig } from '../config'
+import {
+  FEE_BUFFER_SOL,
+  RPC_ENDPOINT,
+  RPC_WS_ENDPOINT,
+  type SnipeConfig,
+} from '../config'
 import type { Position, TokenEvent } from '../types'
 import { useStore } from '../state/store'
 import { pumpPortal, type TradeUpdate } from '../lib/pumpportal'
 import { DexScreenerPoller } from '../lib/dexscreener'
 import { confirmSignature, executeTrade, type SignFn } from '../lib/trade'
-import { shortAddr } from '../lib/format'
+import { fmtSol, shortAddr } from '../lib/format'
 
 function passesFilters(t: TokenEvent, cfg: SnipeConfig): boolean {
   if (cfg.maxDevBuySol > 0 && t.devBuySol != null && t.devBuySol > cfg.maxDevBuySol) {
@@ -47,7 +53,14 @@ export function useSniper(): SniperApi {
   const { wallets } = useSolanaWallets()
   const { signTransaction } = useSignTransaction()
 
-  const wallet = wallets[0]
+  // Pin the trading wallet to the Privy EMBEDDED wallet — the one
+  // useSignTransaction actually signs with. Never blindly take wallets[0],
+  // which can be an external wallet (Phantom) whose signer != fee payer.
+  const wallet =
+    wallets.find(
+      (w) =>
+        w.walletClientType === 'privy' || w.walletClientType === 'privy-v2',
+    ) ?? wallets[0]
   const address = wallet?.address
 
   const connection = useMemo(
@@ -60,16 +73,46 @@ export function useSniper(): SniperApi {
   )
 
   // Keep the latest signer / address in refs so hot-path callbacks stay stable.
-  const signRef = useRef<SignFn>(signTransaction as unknown as SignFn)
-  signRef.current = signTransaction as unknown as SignFn
+  const signRef = useRef(signTransaction)
+  signRef.current = signTransaction
   const addrRef = useRef<string | undefined>(address)
   addrRef.current = address
 
+  // A signer that never shows a wallet modal — this is what makes auto-snipe
+  // fire without a per-trade confirmation. Also pins the signing address to the
+  // embedded wallet so signer and fee payer always match.
+  const sign = useCallback<SignFn>(
+    (args) =>
+      signRef.current({
+        transaction: args.transaction,
+        connection: args.connection,
+        uiOptions: { showWalletUIs: false },
+        address: addrRef.current,
+      }),
+    [],
+  )
+
   // Guards against duplicate concurrent trades keyed by mint (buys) / posId (sells).
   const inFlight = useRef(new Set<string>())
-  // Map of mint -> open position id, so trade updates find their position.
-  const posByMint = useRef(new Map<string, string>())
+  // mint -> set of live position ids, so one trade update reaches every position
+  // held in that mint (a mint can back more than one position).
+  const posByMint = useRef(new Map<string, Set<string>>())
   const dexPoller = useRef<DexScreenerPoller | null>(null)
+
+  const addMapping = (mint: string, posId: string) => {
+    let set = posByMint.current.get(mint)
+    if (!set) {
+      set = new Set()
+      posByMint.current.set(mint, set)
+    }
+    set.add(posId)
+  }
+  const removeMapping = (mint: string, posId: string) => {
+    const set = posByMint.current.get(mint)
+    if (!set) return
+    set.delete(posId)
+    if (set.size === 0) posByMint.current.delete(mint)
+  }
 
   const refreshBalance = useCallback(() => {
     const addr = addrRef.current
@@ -87,7 +130,8 @@ export function useSniper(): SniperApi {
       const g = useStore.getState()
       const pos = g.positions.find((p) => p.id === posId)
       if (!pos) return
-      if (pos.status !== 'open' && pos.status !== 'buying') return
+      // Only sell CONFIRMED holdings. A 'buying' position may not own tokens yet.
+      if (pos.status !== 'open') return
       const addr = addrRef.current
       if (!addr) {
         g.log('error', 'cannot sell: no wallet')
@@ -98,8 +142,9 @@ export function useSniper(): SniperApi {
       inFlight.current.add(key)
 
       const cfg = g.config
+      const sym = pos.symbol || shortAddr(pos.mint)
       g.updatePosition(posId, { status: 'selling' })
-      g.log('trade', `SELL ${pos.symbol || shortAddr(pos.mint)} (${reason})`)
+      g.log('trade', `SELL ${sym} (${reason})`)
       try {
         const res = await executeTrade(
           {
@@ -112,7 +157,7 @@ export function useSniper(): SniperApi {
             priorityFee: cfg.priorityFee,
             pool: pos.pool,
           },
-          signRef.current,
+          sign,
           connection,
         )
         const proceeds =
@@ -126,34 +171,38 @@ export function useSniper(): SniperApi {
             'success',
             `SELL sent ${shortAddr(res.signature)} in ${res.elapsedMs.toFixed(0)}ms`,
           )
-        confirmSignature(connection, res.signature).then((ok) => {
-          const s = useStore.getState()
-          if (ok) {
-            s.updatePosition(posId, {
-              status: 'closed',
-              closedAt: Date.now(),
-              exitProceedsSol: proceeds,
-            })
-            s.log('success', `SELL confirmed ${pos.symbol || shortAddr(pos.mint)}`)
-            posByMint.current.delete(pos.mint)
-            pumpPortal.unwatchTrades(pos.mint)
-            refreshBalance()
-          } else {
-            // Reopen so the user (or auto-manage) can retry.
-            s.updatePosition(posId, { status: 'open' })
-            s.log('warn', `SELL not confirmed, position kept open`)
-          }
-        })
+        confirmSignature(connection, res.signature)
+          .then((result) => {
+            const s = useStore.getState()
+            if (result === 'confirmed') {
+              s.updatePosition(posId, {
+                status: 'closed',
+                closedAt: Date.now(),
+                exitProceedsSol: proceeds,
+              })
+              s.log('success', `SELL confirmed ${sym}`)
+              removeMapping(pos.mint, posId)
+              pumpPortal.unwatchTrades(pos.mint)
+              refreshBalance()
+            } else if (result === 'failed') {
+              // Proven dropped/reverted — reopen so it can be retried.
+              s.updatePosition(posId, { status: 'open', error: 'sell reverted' })
+              s.log('warn', `SELL reverted, position reopened ${sym}`)
+            } else {
+              // timeout — keep 'selling' so onTrade can't re-fire; tx may land.
+              s.log('warn', `SELL unconfirmed (kept selling) ${sym}`)
+            }
+          })
+          .finally(() => inFlight.current.delete(key))
       } catch (e) {
         useStore
           .getState()
           .updatePosition(posId, { status: 'open', error: (e as Error).message })
         useStore.getState().log('error', `SELL error: ${(e as Error).message}`)
-      } finally {
         inFlight.current.delete(key)
       }
     },
-    [connection, refreshBalance],
+    [connection, refreshBalance, sign],
   )
 
   const snipe = useCallback(
@@ -161,6 +210,7 @@ export function useSniper(): SniperApi {
       const g = useStore.getState()
       const cfg = g.config
       const addr = addrRef.current
+      const sym = token.symbol || shortAddr(token.mint)
       if (!addr) {
         g.log('error', 'cannot buy: no wallet')
         return
@@ -184,13 +234,31 @@ export function useSniper(): SniperApi {
         }
       }
 
+      const invested = amountOverride ?? cfg.buyAmountSol
+
+      // --- safety guards (before any state mutation) --------------------------
+      const needed = invested + cfg.priorityFee + FEE_BUFFER_SOL
+      if (g.balanceSol != null && g.balanceSol < needed) {
+        g.log(
+          'warn',
+          `skip ${sym}: balance ${fmtSol(g.balanceSol)}◎ < needed ${fmtSol(needed)}◎`,
+        )
+        return
+      }
+      if (cfg.maxSpendSol > 0 && g.sessionSpentSol + invested > cfg.maxSpendSol) {
+        g.log(
+          'warn',
+          `skip ${sym}: session spend cap ${cfg.maxSpendSol}◎ reached`,
+        )
+        return
+      }
+
       inFlight.current.add(token.mint)
+      g.addSpend(invested) // reserve against the cap; refunded if the buy fails
       const posId =
         typeof crypto !== 'undefined' && crypto.randomUUID
           ? crypto.randomUUID()
           : `${token.mint}-${Date.now()}`
-      const invested = amountOverride ?? cfg.buyAmountSol
-      const entry = token.priceSol
       const position: Position = {
         id: posId,
         mint: token.mint,
@@ -199,17 +267,24 @@ export function useSniper(): SniperApi {
         pool: token.pool,
         status: 'buying',
         investedSol: invested,
-        entryPriceSol: entry,
-        lastPriceSol: entry,
-        tokenAmount: entry && entry > 0 ? invested / entry : undefined,
+        // Leave entry undefined: the true entry is captured from the first real
+        // trade after our buy (reflects slippage + our own price impact), which
+        // onTrade backfills. The detection price is only a provisional display.
+        entryPriceSol: undefined,
+        lastPriceSol: token.priceSol,
+        tokenAmount: undefined,
         openedAt: Date.now(),
         takeProfitPct: cfg.takeProfitPct,
         stopLossPct: cfg.stopLossPct,
       }
       g.addPosition(position)
+      // Track + subscribe to price BEFORE the buy resolves so we never miss the
+      // first post-buy trade that establishes our entry.
+      addMapping(token.mint, posId)
+      pumpPortal.watchTrades(token.mint)
       g.log(
         'trade',
-        `BUY ${token.symbol || shortAddr(token.mint)} ${invested} SOL [${token.pool}]${auto ? ' (auto)' : ''}`,
+        `BUY ${sym} ${invested} SOL [${token.pool}]${auto ? ' (auto)' : ''}`,
       )
 
       try {
@@ -224,7 +299,7 @@ export function useSniper(): SniperApi {
             priorityFee: cfg.priorityFee,
             pool: token.pool,
           },
-          signRef.current,
+          sign,
           connection,
         )
         useStore.getState().updatePosition(posId, { buySignature: res.signature })
@@ -232,71 +307,91 @@ export function useSniper(): SniperApi {
           .getState()
           .log(
             'success',
-            `BUY sent ${token.symbol || shortAddr(token.mint)} ${shortAddr(res.signature)} in ${res.elapsedMs.toFixed(0)}ms`,
+            `BUY sent ${sym} ${shortAddr(res.signature)} in ${res.elapsedMs.toFixed(0)}ms`,
           )
-        posByMint.current.set(token.mint, posId)
-        pumpPortal.watchTrades(token.mint)
 
-        confirmSignature(connection, res.signature).then((ok) => {
+        confirmSignature(connection, res.signature).then((result) => {
           const s = useStore.getState()
           const cur = s.positions.find((p) => p.id === posId)
-          if (!cur || cur.status === 'closed') return
-          if (ok) {
+          // Don't resurrect a position a sell/close already took over.
+          if (
+            !cur ||
+            cur.status === 'closed' ||
+            cur.status === 'selling' ||
+            cur.status === 'failed'
+          ) {
+            return
+          }
+          if (result === 'confirmed') {
             s.updatePosition(posId, { status: 'open' })
-            s.log('success', `BUY confirmed ${token.symbol || shortAddr(token.mint)}`)
+            s.log('success', `BUY confirmed ${sym}`)
+            refreshBalance()
+          } else if (result === 'failed') {
+            // Proven on-chain failure — safe to untrack and refund the cap.
+            s.updatePosition(posId, { status: 'failed', error: 'buy reverted' })
+            s.log('error', `BUY failed ${sym}`)
+            removeMapping(token.mint, posId)
+            pumpPortal.unwatchTrades(token.mint)
+            s.addSpend(-invested)
             refreshBalance()
           } else {
+            // timeout — the tx may still land; KEEP the position tracked.
             s.updatePosition(posId, {
-              status: 'failed',
-              error: 'buy not confirmed',
+              status: 'open',
+              error: 'unconfirmed within 30s',
             })
-            s.log('error', `BUY failed ${token.symbol || shortAddr(token.mint)}`)
-            posByMint.current.delete(token.mint)
-            pumpPortal.unwatchTrades(token.mint)
+            s.log('warn', `BUY unconfirmed (kept, may still land) ${sym}`)
+            refreshBalance()
           }
         })
       } catch (e) {
-        useStore
-          .getState()
-          .updatePosition(posId, { status: 'failed', error: (e as Error).message })
-        useStore.getState().log('error', `BUY error: ${(e as Error).message}`)
+        // Build/sign/send never landed a tx: untrack and refund the cap.
+        const s = useStore.getState()
+        s.updatePosition(posId, { status: 'failed', error: (e as Error).message })
+        s.log('error', `BUY error: ${(e as Error).message}`)
+        removeMapping(token.mint, posId)
+        pumpPortal.unwatchTrades(token.mint)
+        s.addSpend(-invested)
       } finally {
         inFlight.current.delete(token.mint)
       }
     },
-    [connection, refreshBalance],
+    [connection, refreshBalance, sign],
   )
 
   const onTrade = useCallback(
     (u: TradeUpdate) => {
-      const posId = posByMint.current.get(u.mint)
-      if (!posId) return
-      const s = useStore.getState()
-      const pos = s.positions.find((p) => p.id === posId)
-      if (!pos) return
+      const set = posByMint.current.get(u.mint)
+      if (!set || set.size === 0) return
       if (u.priceSol == null) return
+      const s = useStore.getState()
+      for (const posId of set) {
+        const pos = s.positions.find((p) => p.id === posId)
+        if (!pos) continue
 
-      // First real price after a market buy becomes the entry reference.
-      const patch: Partial<Position> = { lastPriceSol: u.priceSol }
-      if (pos.entryPriceSol == null) {
-        patch.entryPriceSol = u.priceSol
-        if (pos.tokenAmount == null && u.priceSol > 0) {
-          patch.tokenAmount = pos.investedSol / u.priceSol
+        // First real price after our buy establishes the entry baseline.
+        const patch: Partial<Position> = { lastPriceSol: u.priceSol }
+        if (pos.entryPriceSol == null) {
+          patch.entryPriceSol = u.priceSol
+          if (pos.tokenAmount == null && u.priceSol > 0) {
+            patch.tokenAmount = pos.investedSol / u.priceSol
+          }
         }
-      }
-      s.updatePosition(posId, patch)
+        s.updatePosition(posId, patch)
 
-      if (pos.status !== 'open') return
-      const entry = pos.entryPriceSol ?? patch.entryPriceSol
-      if (!entry) return
-      const pnl = ((u.priceSol - entry) / entry) * 100
-      if (!s.config.autoManage) return
-      if (pnl >= pos.takeProfitPct) {
-        s.log('info', `TP ${pnl.toFixed(1)}% ${pos.symbol || shortAddr(pos.mint)}`)
-        void sellPosition(posId, 'take-profit')
-      } else if (pnl <= -pos.stopLossPct) {
-        s.log('info', `SL ${pnl.toFixed(1)}% ${pos.symbol || shortAddr(pos.mint)}`)
-        void sellPosition(posId, 'stop-loss')
+        // TP/SL only on confirmed, not-being-sold positions.
+        if (pos.status !== 'open') continue
+        const entry = pos.entryPriceSol ?? patch.entryPriceSol
+        if (!entry) continue
+        const pnl = ((u.priceSol - entry) / entry) * 100
+        if (!s.config.autoManage) continue
+        if (pnl >= pos.takeProfitPct) {
+          s.log('info', `TP ${pnl.toFixed(1)}% ${pos.symbol || shortAddr(pos.mint)}`)
+          void sellPosition(posId, 'take-profit')
+        } else if (pnl <= -pos.stopLossPct) {
+          s.log('info', `SL ${pnl.toFixed(1)}% ${pos.symbol || shortAddr(pos.mint)}`)
+          void sellPosition(posId, 'stop-loss')
+        }
       }
     },
     [sellPosition],
@@ -389,9 +484,7 @@ export function useSniper(): SniperApi {
 
   const closeAll = useCallback(() => {
     const g = useStore.getState()
-    const open = g.positions.filter(
-      (p) => p.status === 'open' || p.status === 'buying',
-    )
+    const open = g.positions.filter((p) => p.status === 'open')
     if (open.length === 0) {
       g.log('info', 'no open positions to close')
       return

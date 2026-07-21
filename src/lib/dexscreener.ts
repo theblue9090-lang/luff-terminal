@@ -116,6 +116,12 @@ export class DexScreenerPoller {
   private handler: NewTokenHandler
   private intervalMs: number
   private started = false
+  /**
+   * Set true only after the FIRST fully successful fetch has populated `seen`.
+   * Until then every pass is a priming pass that records but emits nothing, so
+   * a slow or failed prime can never dump the whole backlog as "new".
+   */
+  private primed = false
 
   constructor(handler: NewTokenHandler, intervalMs = 4000) {
     this.handler = handler
@@ -125,11 +131,10 @@ export class DexScreenerPoller {
   start() {
     if (this.started) return
     this.started = true
+    this.primed = false
     this.abort = new AbortController()
-    // Prime `seen` on the first pass so we don't dump the whole backlog as
-    // "new"; only genuinely fresh entries after startup are emitted.
-    void this.poll(true)
-    this.timer = setInterval(() => void this.poll(false), this.intervalMs)
+    void this.poll()
+    this.timer = setInterval(() => void this.poll(), this.intervalMs)
   }
 
   stop() {
@@ -144,8 +149,11 @@ export class DexScreenerPoller {
     }
   }
 
-  private async poll(prime: boolean) {
+  private async poll() {
     const signal = this.abort?.signal
+    // Capture prime state at pass start; we only emit once a prior pass fully
+    // succeeded. `this.primed` is flipped true only after this pass completes.
+    const wasPrimed = this.primed
     try {
       const profiles = await getJson<DsProfile[]>(
         `${DEXSCREENER_BASE}/token-profiles/latest/v1`,
@@ -157,7 +165,7 @@ export class DexScreenerPoller {
       for (const p of solProfiles) {
         if (this.seen.has(p.tokenAddress)) continue
         this.seen.add(p.tokenAddress)
-        if (prime) continue
+        if (!wasPrimed) continue // priming pass: record, emit nothing
         // Emit immediately with what we have; enrichment fills in price/liq.
         const base: TokenEvent = {
           mint: p.tokenAddress,
@@ -169,12 +177,15 @@ export class DexScreenerPoller {
         const enriched = await enrichMint(p.tokenAddress, signal)
         this.handler(enriched ? { ...base, ...enriched } : base)
       }
+      // Mark primed only after a fully successful pass.
+      this.primed = true
       // Bound memory over long sessions.
       if (this.seen.size > 5000) {
         this.seen = new Set([...this.seen].slice(-2500))
       }
     } catch {
       // Transient network / rate-limit errors: swallow and retry next tick.
+      // `primed` stays false if the very first pass failed, so we re-prime.
     }
   }
 }

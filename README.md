@@ -29,9 +29,17 @@ can react in milliseconds.
   (max dev-buy, min liquidity, max open positions).
 - **Auto take-profit / stop-loss** — held positions are tracked in real time via
   the PumpPortal per-token trade stream and auto-sold when your TP/SL triggers.
+- **No-confirmation auto-buy** — the embedded wallet signs every buy/sell
+  *silently* (`showWalletUIs: false`), so auto-snipe fires with **zero popups**.
+  A one-click **⚡ Hands-free** toggle additionally *delegates* the wallet
+  (Privy headless delegation) so it's explicitly authorized once and never asks
+  again; fully revocable.
 - **Self-custodial trades** — PumpPortal only *builds* the transaction; your
   Privy embedded wallet signs it; the app broadcasts it. Your key never leaves
   Privy.
+- **Safety rails** — per-buy balance check, a session spend cap, a max-open-
+  positions limit, and duplicate-buy guards so a runaway feed can't drain the
+  wallet.
 - **Terminal UX** — live feed, positions with PnL, console log, and a command
   bar (`buy`, `sell`, `set`, `auto on/off`, `start/stop`, `closeall`).
 
@@ -62,6 +70,17 @@ npm run dev
 Open the printed localhost URL, click **CONNECT WITH PRIVY**, and a Solana
 embedded wallet is created for you automatically. **Fund that wallet's address
 with SOL** (shown in the header), tune your config, then press **START ENGINE**.
+
+### Hands-free (no-confirmation) trading
+
+Buys and sells never show a confirmation popup — the app configures the Privy
+embedded wallet with `showWalletUIs: false`, so signing is silent by design.
+For an explicit, one-time authorization, click **⚡ HANDS-FREE** in the header:
+this *delegates* your embedded wallet via Privy's headless delegation so the
+sniper is authorized to transact on your behalf and will never ask again. Click
+it again any time to revoke. Delegation is optional — silent signing works
+without it — but it's the cleanest way to guarantee zero interruptions during
+auto-snipe.
 
 ## Configuration
 

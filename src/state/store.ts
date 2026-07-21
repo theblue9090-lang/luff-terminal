@@ -52,6 +52,10 @@ interface SniperState {
   detectedCount: number
   snipedCount: number
   incDetected: () => void
+
+  // cumulative SOL committed to buys this session (spend guard)
+  sessionSpentSol: number
+  addSpend: (delta: number) => void
 }
 
 export const useStore = create<SniperState>((set) => ({
@@ -111,4 +115,8 @@ export const useStore = create<SniperState>((set) => ({
   detectedCount: 0,
   snipedCount: 0,
   incDetected: () => set((s) => ({ detectedCount: s.detectedCount + 1 })),
+
+  sessionSpentSol: 0,
+  addSpend: (delta) =>
+    set((s) => ({ sessionSpentSol: Math.max(0, s.sessionSpentSol + delta) })),
 }))

@@ -53,6 +53,15 @@ export const DEXSCREENER_BASE: string =
 /** WSOL / SOL mint used for price math and DexScreener quote-token checks. */
 export const SOL_MINT = 'So11111111111111111111111111111111111111112'
 
+/**
+ * Headroom kept aside on every buy for the base signature fee + a little rent,
+ * so a snipe is never attempted with a balance that can't cover fees.
+ */
+export const FEE_BUFFER_SOL = 0.003
+
+/** Hard deadline for the PumpPortal trade-local build request (ms). */
+export const BUILD_TIMEOUT_MS = 3000
+
 /** Solana clusters config passed to Privy for embedded-wallet signing. */
 export const SOLANA_CLUSTERS = [
   { name: 'mainnet-beta' as const, rpcUrl: RPC_ENDPOINT },
@@ -80,6 +89,8 @@ export const DEFAULT_SNIPE = {
   maxDevBuySol: 2,
   /** Only snipe tokens with at least this initial liquidity (SOL). */
   minLiquiditySol: 0,
+  /** Cumulative SOL this session may spend on buys. 0 = unlimited. */
+  maxSpendSol: 1,
 }
 
 export type SnipeConfig = typeof DEFAULT_SNIPE

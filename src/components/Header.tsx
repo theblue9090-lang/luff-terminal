@@ -3,6 +3,7 @@ import { useStore } from '../state/store'
 import { fmtSol, shortAddr } from '../lib/format'
 import type { FeedStatus } from '../types'
 import type { SniperApi } from '../hooks/useSniper'
+import { HandsFreeToggle } from './HandsFreeToggle'
 
 function StatusDot({ status, label }: { status: FeedStatus; label: string }) {
   return (
@@ -55,6 +56,8 @@ export function Header({ api }: { api: SniperApi }) {
           <span className="k">wallet</span>
           <span className="v">{shortAddr(api.address)}</span>
         </div>
+
+        <HandsFreeToggle />
 
         {running ? (
           <button className="btn danger" onClick={api.stop}>

@@ -70,6 +70,7 @@ export class PumpPortalClient {
   private status: FeedStatus = 'disconnected'
   private reconnectAttempts = 0
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private stableTimer: ReturnType<typeof setTimeout> | null = null
   private closedByUser = false
 
   private newTokenHandlers = new Set<NewTokenHandler>()
@@ -78,8 +79,12 @@ export class PumpPortalClient {
 
   /** Whether we've asked for the new-token firehose. */
   private wantNewTokens = false
-  /** Mints we want live trades for (positions we hold / watch). */
-  private tradeMints = new Set<string>()
+  /**
+   * Reference-counted per-mint trade subscriptions. A mint can back more than
+   * one open position, so we only unsubscribe when the last watcher leaves —
+   * otherwise closing one position would blind the others' TP/SL.
+   */
+  private tradeWatchers = new Map<string, number>()
 
   connect() {
     this.closedByUser = false
@@ -106,15 +111,19 @@ export class PumpPortalClient {
     this.ws = ws
 
     ws.onopen = () => {
-      this.reconnectAttempts = 0
       this.setStatus('connected')
+      // Only reset backoff once the connection has proven stable for a while;
+      // resetting immediately would defeat exponential backoff when the socket
+      // opens then drops in a tight flap loop.
+      if (this.stableTimer) clearTimeout(this.stableTimer)
+      this.stableTimer = setTimeout(() => {
+        this.reconnectAttempts = 0
+      }, 10000)
       // Re-apply any subscriptions after a (re)connect.
       if (this.wantNewTokens) this.send({ method: 'subscribeNewToken' })
-      if (this.tradeMints.size > 0) {
-        this.send({
-          method: 'subscribeTokenTrade',
-          keys: [...this.tradeMints],
-        })
+      const mints = [...this.tradeWatchers.keys()]
+      if (mints.length > 0) {
+        this.send({ method: 'subscribeTokenTrade', keys: mints })
       }
     }
 
@@ -127,6 +136,10 @@ export class PumpPortalClient {
 
     ws.onclose = () => {
       this.ws = null
+      if (this.stableTimer) {
+        clearTimeout(this.stableTimer)
+        this.stableTimer = null
+      }
       if (this.closedByUser) {
         this.setStatus('disconnected')
         return
@@ -233,15 +246,22 @@ export class PumpPortalClient {
   }
 
   watchTrades(mint: string) {
-    if (this.tradeMints.has(mint)) return
-    this.tradeMints.add(mint)
-    this.send({ method: 'subscribeTokenTrade', keys: [mint] })
+    const n = this.tradeWatchers.get(mint) ?? 0
+    this.tradeWatchers.set(mint, n + 1)
+    // Subscribe only on the first watcher for this mint.
+    if (n === 0) this.send({ method: 'subscribeTokenTrade', keys: [mint] })
   }
 
   unwatchTrades(mint: string) {
-    if (!this.tradeMints.has(mint)) return
-    this.tradeMints.delete(mint)
-    this.send({ method: 'unsubscribeTokenTrade', keys: [mint] })
+    const n = this.tradeWatchers.get(mint) ?? 0
+    if (n === 0) return
+    if (n === 1) {
+      this.tradeWatchers.delete(mint)
+      // Unsubscribe only when the last watcher leaves.
+      this.send({ method: 'unsubscribeTokenTrade', keys: [mint] })
+    } else {
+      this.tradeWatchers.set(mint, n - 1)
+    }
   }
 
   onNewToken(h: NewTokenHandler): () => void {
@@ -264,6 +284,10 @@ export class PumpPortalClient {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
+    }
+    if (this.stableTimer) {
+      clearTimeout(this.stableTimer)
+      this.stableTimer = null
     }
     if (this.ws) {
       try {
