@@ -31,6 +31,26 @@ export const RPC_WS_ENDPOINT: string | undefined = env.VITE_SOLANA_RPC_WS as
   | undefined
 
 /**
+ * Endpoints a signed transaction is sprayed to when broadcasting. We fire the
+ * same signed tx at several free, no-key RPCs in parallel and take the first
+ * that accepts it — resilient to any single RPC blocking `sendTransaction`
+ * (which is exactly why the bare public endpoint returned 403), and it also
+ * lands the tx faster. Duplicate sends of an identical signature are deduped by
+ * the network, so spraying is safe. api.mainnet-beta is excluded because it
+ * rejects sends. Your VITE_SOLANA_RPC (a paid RPC) is tried first when set.
+ */
+export const SEND_RPCS: string[] = Array.from(
+  new Set(
+    [
+      RPC_ENDPOINT,
+      'https://solana-rpc.publicnode.com',
+      'https://solana.drpc.org',
+      'https://endpoints.omniatech.io/v1/sol/mainnet/public',
+    ].filter((u) => u && u !== 'https://api.mainnet-beta.solana.com'),
+  ),
+)
+
+/**
  * PumpPortal real-time data websocket. Free for subscribeNewToken /
  * subscribeTokenTrade. An api-key is only needed for the Lightning trade API,
  * which this app does not use (we self-sign via trade-local).

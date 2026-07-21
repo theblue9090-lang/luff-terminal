@@ -16,7 +16,8 @@ import {
   VersionedTransaction,
   Transaction,
 } from '@solana/web3.js'
-import { BUILD_TIMEOUT_MS, PUMPPORTAL_TRADE_URL } from '../config'
+import { Buffer } from 'buffer'
+import { BUILD_TIMEOUT_MS, PUMPPORTAL_TRADE_URL, SEND_RPCS } from '../config'
 import type { Pool } from '../types'
 
 export type TradeAction = 'buy' | 'sell'
@@ -106,6 +107,84 @@ async function buildTx(
   }
 }
 
+/** Send one signed tx (base64) to a single RPC via raw JSON-RPC. */
+async function sendToEndpoint(
+  endpoint: string,
+  b64: string,
+): Promise<string> {
+  const host = (() => {
+    try {
+      return new URL(endpoint).host
+    } catch {
+      return endpoint
+    }
+  })()
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'sendTransaction',
+      params: [
+        b64,
+        {
+          encoding: 'base64',
+          skipPreflight: true,
+          maxRetries: 2,
+          preflightCommitment: 'processed',
+        },
+      ],
+    }),
+  })
+  if (!res.ok) throw new Error(`${host} ${res.status}`)
+  const json = (await res.json()) as {
+    result?: string
+    error?: { message?: string; code?: number }
+  }
+  if (json.error) {
+    throw new Error(`${host}: ${json.error.message ?? JSON.stringify(json.error)}`)
+  }
+  if (!json.result) throw new Error(`${host}: empty result`)
+  return json.result
+}
+
+/**
+ * Spray the signed tx to every send RPC in parallel; resolve with the first
+ * signature accepted, reject only if ALL endpoints refuse. Later successes just
+ * duplicate an identical signature and are deduped by the network.
+ */
+export function broadcastRaw(
+  raw: Uint8Array,
+  endpoints: string[] = SEND_RPCS,
+): Promise<string> {
+  const b64 = Buffer.from(raw).toString('base64')
+  return new Promise<string>((resolve, reject) => {
+    let pending = endpoints.length
+    if (pending === 0) {
+      reject(new Error('no send RPCs configured'))
+      return
+    }
+    const errs: string[] = []
+    let settled = false
+    for (const e of endpoints) {
+      sendToEndpoint(e, b64)
+        .then((sig) => {
+          if (!settled) {
+            settled = true
+            resolve(sig)
+          }
+        })
+        .catch((err) => {
+          errs.push((err as Error).message)
+          if (--pending === 0 && !settled) {
+            reject(new Error(`all RPCs rejected send: ${errs.join(' | ')}`))
+          }
+        })
+    }
+  })
+}
+
 /**
  * Execute a trade end to end. `connection` is reused (already warm) so we skip
  * connection setup latency on the hot path.
@@ -146,11 +225,8 @@ export async function executeTrade(
   const raw = signed.serialize()
   let signature: string
   try {
-    signature = await connection.sendRawTransaction(raw, {
-      skipPreflight: true, // speed: don't round-trip a simulation first
-      maxRetries: 2,
-      preflightCommitment: 'processed',
-    })
+    // Spray to multiple free RPCs in parallel; first to accept wins.
+    signature = await broadcastRaw(raw)
   } catch (e) {
     throw new TradeError(`broadcast failed: ${(e as Error).message}`, 'send')
   }

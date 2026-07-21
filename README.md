@@ -73,14 +73,19 @@ with SOL** (shown in the header), tune your config, then press **START ENGINE**.
 
 ### RPC endpoint
 
-Ships with a **free, no-key public RPC** ([PublicNode](https://publicnode.com),
-`https://solana-rpc.publicnode.com`) that — unlike `api.mainnet-beta.solana.com`
-— accepts transaction sends, so buys broadcast out of the box on mainnet with no
-setup. It is rate-limited and not ideal for competitive sniping: for real use,
-set `VITE_SOLANA_RPC` in `.env.local` to a paid RPC
+Runs on mainnet with **free, no-key RPCs** out of the box — no setup. Reads and
+confirmations use [PublicNode](https://publicnode.com), and every buy/sell is
+**sprayed to several free RPCs in parallel** (PublicNode, dRPC, Omnia); the first
+that accepts the transaction wins. This is what fixes `broadcast failed: 403` —
+the bare `api.mainnet-beta.solana.com` endpoint refuses sends, so relying on any
+single free RPC is fragile; spraying routes around whichever one is blocking or
+throttling, and also lands the tx faster.
+
+Free RPCs are still rate-limited and not ideal for competitive sniping. For real
+use set `VITE_SOLANA_RPC` in `.env.local` to a paid RPC
 ([Helius](https://helius.dev), [QuickNode](https://quicknode.com),
-[Triton](https://triton.one)). If the free RPC throttles a send you'll see a
-`403/429` hint in the console pointing you to do this.
+[Triton](https://triton.one)) — it's then tried first in the spray. If every RPC
+refuses a send you'll see a hint in the console pointing you to do this.
 
 ### Hands-free (no-confirmation) trading
 
