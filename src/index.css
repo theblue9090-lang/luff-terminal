@@ -1,18 +1,24 @@
 :root {
-  --bg: #050807;
-  --bg-panel: #0a0f0d;
-  --bg-panel-2: #0d1512;
-  --border: #163a2b;
-  --border-soft: #0f251c;
-  --green: #22e07a;
-  --green-dim: #1f9d5c;
-  --green-faint: #0e5c37;
+  --bg: #0a0505;
+  --bg-panel: #120a0a;
+  --bg-panel-2: #180d0d;
+  --border: #4a1a1a;
+  --border-soft: #2a1010;
+  /* Primary accent (red theme). Names kept as --green* so all references
+     across the app switch theme from this one place. */
+  --green: #ff3b3b;
+  --green-dim: #d43333;
+  --green-faint: #7a2020;
+  --accent-rgb: 255, 59, 59;
   --amber: #f5b342;
-  --red: #ff5c5c;
-  --cyan: #38d6d6;
-  --text: #b8f5d4;
-  --text-dim: #5f8f78;
-  --text-faint: #3a5c4c;
+  --red: #ff6b6b;
+  --cyan: #ff9d3b;
+  /* Semantic PnL colors — kept green/red for readability regardless of theme. */
+  --profit: #22e07a;
+  --loss: #ff4d4d;
+  --text: #f5cccc;
+  --text-dim: #b07575;
+  --text-faint: #6e4444;
   --mono: 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas',
     'Liberation Mono', monospace;
   color-scheme: dark;
@@ -49,7 +55,7 @@ body::before {
     0deg,
     rgba(0, 0, 0, 0) 0px,
     rgba(0, 0, 0, 0) 2px,
-    rgba(0, 20, 10, 0.18) 3px
+    rgba(25, 0, 0, 0.2) 3px
   );
   z-index: 9999;
   opacity: 0.35;
@@ -104,5 +110,5 @@ select {
 }
 
 .glow {
-  text-shadow: 0 0 6px rgba(34, 224, 122, 0.5);
+  text-shadow: 0 0 6px rgba(var(--accent-rgb), 0.5);
 }

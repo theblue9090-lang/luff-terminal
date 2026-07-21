@@ -170,11 +170,11 @@
 .btn.primary {
   border-color: var(--green-faint);
   color: var(--green);
-  background: rgba(34, 224, 122, 0.06);
+  background: rgba(var(--accent-rgb), 0.06);
 }
 .btn.primary:hover {
-  background: rgba(34, 224, 122, 0.16);
-  box-shadow: 0 0 10px rgba(34, 224, 122, 0.25);
+  background: rgba(var(--accent-rgb), 0.16);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.25);
 }
 .btn.danger {
   border-color: #5c2020;
@@ -261,7 +261,7 @@
   transition: all 0.15s;
 }
 .switch.on {
-  background: rgba(34, 224, 122, 0.2);
+  background: rgba(var(--accent-rgb), 0.2);
   border-color: var(--green-faint);
 }
 .switch.on::after {
@@ -371,7 +371,7 @@
   font-size: 12px;
 }
 .row:hover {
-  background: rgba(34, 224, 122, 0.04);
+  background: rgba(var(--accent-rgb), 0.04);
 }
 .feed-row {
   grid-template-columns: 1fr auto auto;
@@ -408,10 +408,10 @@
 }
 
 .pnl-pos {
-  color: var(--green);
+  color: var(--profit);
 }
 .pnl-neg {
-  color: var(--red);
+  color: var(--loss);
 }
 
 .status-pill {
