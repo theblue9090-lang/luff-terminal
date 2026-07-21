@@ -413,6 +413,12 @@
 .row:hover {
   background: rgba(var(--accent-rgb), 0.05);
 }
+.row.dim {
+  opacity: 0.4;
+}
+.row.dim:hover {
+  opacity: 0.7;
+}
 .feed-row {
   grid-template-columns: 1fr auto auto;
 }

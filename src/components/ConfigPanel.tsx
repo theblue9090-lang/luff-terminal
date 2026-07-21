@@ -103,9 +103,10 @@ export function ConfigPanel() {
         </div>
 
         <div className="muted mono-xs" style={{ marginTop: 8, lineHeight: 1.6 }}>
-          only coins within the market-cap and liquidity range (USD) are
-          detected. filters of 0 are ignored. dev-buy filter only applies to
-          pump.fun events. the spend cap limits total SOL spent this session.
+          the feed shows every new coin; only those within the market-cap and
+          liquidity range (USD) are AUTO-SNIPED (others are dimmed). filters of 0
+          are ignored. dev-buy filter only applies to pump.fun events. the spend
+          cap limits total SOL spent this session.
         </div>
       </div>
     </div>

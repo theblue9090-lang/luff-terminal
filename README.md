@@ -123,9 +123,11 @@ All settings are editable live in the left panel (or via the `set` command):
 | Min liq ($) | Only detect coins with at least this liquidity, USD (0 = off). Default $2k |
 | Max dev buy (SOL) | Skip pump.fun tokens whose creator bought more than this (0 = off) |
 
-Market-cap and liquidity are filtered in **USD** and applied at *detection* — coins
-outside the range never appear in the feed. DexScreener reports USD directly;
-pump.fun values (reported in SOL) are converted using a live SOL/USD price.
+The live feed shows **every** detected new coin; the market-cap and liquidity
+range (USD) gates which ones are **auto-sniped** — coins outside the range are
+shown dimmed and are not auto-bought (you can still snipe them manually).
+DexScreener reports USD directly; pump.fun values (reported in SOL) are converted
+using a live SOL/USD price.
 
 Environment variables (see `.env.example`):
 

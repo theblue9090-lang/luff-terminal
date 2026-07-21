@@ -476,12 +476,13 @@ export function useSniper(): SniperApi {
       if (BLOCKED_MINTS.has(raw.mint)) return
       const s = useStore.getState()
       const t = withUsd(raw, s.solUsd)
-      // Detection gate: only new coins within the configured USD mcap/liquidity.
-      if (!passesDetection(t, s.config)) return
+      // Always surface detected tokens so the feed reflects live activity; the
+      // mcap/liquidity range gates which ones are AUTO-BOUGHT, not detection.
       s.pushToken(t)
       if (!s.running || !s.config.autoSnipe) return
+      // Auto-snipe gates: USD market-cap / liquidity range, dev-buy, freshness.
+      if (!passesDetection(t, s.config)) return
       if (!passesSnipe(t, s.config)) return
-      // DexScreener entries must be fresh + on a snipeable pool to auto-buy.
       if (t.source === 'dexscreener' && !isDexSnipeable(t)) return
       void snipe(t, true)
     },
