@@ -80,14 +80,6 @@ function passesDetection(t: TokenEvent, cfg: SnipeConfig): boolean {
   return true
 }
 
-/** Extra gate applied only before an auto-buy (pump.fun dev-buy safety). */
-function passesSnipe(t: TokenEvent, cfg: SnipeConfig): boolean {
-  if (cfg.maxDevBuySol > 0 && t.devBuySol != null && t.devBuySol > cfg.maxDevBuySol) {
-    return false
-  }
-  return true
-}
-
 /**
  * DexScreener token-profiles is a promotions feed, not a new-launch feed, so
  * only auto-snipe entries that enrichment confirms are on a snipeable pool AND
@@ -170,6 +162,8 @@ export function useSniper(): SniperApi {
   const dexPoller = useRef<DexScreenerPoller | null>(null)
   // Latest price-poll fn, so a buy can trigger an immediate refresh.
   const pollRef = useRef<() => void>(() => {})
+  // Throttle "skipped (below filter)" console lines so the feed doesn't flood.
+  const lastSkipLog = useRef(0)
 
   const addMapping = (mint: string, posId: string) => {
     let set = posByMint.current.get(mint)
@@ -482,10 +476,39 @@ export function useSniper(): SniperApi {
       // mcap/liquidity range gates which ones are AUTO-BOUGHT, not detection.
       s.pushToken(t)
       if (!s.running || !s.config.autoSnipe) return
-      // Auto-snipe gates: USD market-cap / liquidity range, dev-buy, freshness.
-      if (!passesDetection(t, s.config)) return
-      if (!passesSnipe(t, s.config)) return
-      if (t.source === 'dexscreener' && !isDexSnipeable(t)) return
+      const sym = t.symbol || shortAddr(t.mint)
+      const cfg = s.config
+      // Gate 1: USD market-cap / liquidity range (throttled skip log).
+      if (!passesDetection(t, cfg)) {
+        const now = Date.now()
+        if (now - lastSkipLog.current > 3000) {
+          lastSkipLog.current = now
+          const mc = t.marketCapUsd != null
+            ? `$${Math.round(t.marketCapUsd).toLocaleString()}`
+            : '?'
+          const lq = t.liquidityUsd != null
+            ? `$${Math.round(t.liquidityUsd).toLocaleString()}`
+            : '?'
+          s.log('info', `skip ${sym}: mc ${mc} / liq ${lq} outside filter range`)
+        }
+        return
+      }
+      // Gate 2: dev-buy (off by default; logged when it blocks so it's never silent).
+      if (
+        cfg.maxDevBuySol > 0 &&
+        t.devBuySol != null &&
+        t.devBuySol > cfg.maxDevBuySol
+      ) {
+        s.log(
+          'info',
+          `skip ${sym}: dev buy ${fmtSol(t.devBuySol)}◎ > max ${cfg.maxDevBuySol}◎ (set max dev buy to 0 to allow)`,
+        )
+        return
+      }
+      if (t.source === 'dexscreener' && !isDexSnipeable(t)) {
+        s.log('info', `skip ${sym}: dexscreener pair not fresh/snipeable`)
+        return
+      }
       void snipe(t, true)
     },
     [snipe],

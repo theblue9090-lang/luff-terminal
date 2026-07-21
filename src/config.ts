@@ -175,6 +175,8 @@ export function wsFromHttp(url: string): string | undefined {
 }
 
 const CONFIG_STORAGE_KEY = 'luff.config'
+const CONFIG_VERSION_KEY = 'luff.configVersion'
+const CONFIG_VERSION = 2
 
 /** Persist the snipe config so settings survive reloads. */
 export function saveConfig(cfg: SnipeConfig): void {
@@ -185,12 +187,25 @@ export function saveConfig(cfg: SnipeConfig): void {
   }
 }
 
-/** Load persisted snipe config merged over defaults. */
+/** Load persisted snipe config merged over defaults, applying migrations. */
 export function loadConfig(defaults: SnipeConfig): SnipeConfig {
   try {
     const raw = localStorage.getItem(CONFIG_STORAGE_KEY)
     if (!raw) return defaults
-    return { ...defaults, ...(JSON.parse(raw) as Partial<SnipeConfig>) }
+    const cfg = { ...defaults, ...(JSON.parse(raw) as Partial<SnipeConfig>) }
+    const v = Number(localStorage.getItem(CONFIG_VERSION_KEY) || '1')
+    if (v < 2) {
+      // The dev-buy filter was never a requested filter and its old default (2)
+      // silently blocked otherwise-eligible auto-buys — disable it once.
+      cfg.maxDevBuySol = 0
+      try {
+        localStorage.setItem(CONFIG_VERSION_KEY, String(CONFIG_VERSION))
+        localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(cfg))
+      } catch {
+        /* ignore */
+      }
+    }
+    return cfg
   } catch {
     return defaults
   }
@@ -214,8 +229,8 @@ export const DEFAULT_SNIPE = {
   autoManage: true,
   /** Max simultaneous open positions when auto-sniping. */
   maxOpenPositions: 3,
-  /** Reject tokens whose initial dev buy (SOL) exceeds this. 0 = no cap. */
-  maxDevBuySol: 2,
+  /** Reject tokens whose initial dev buy (SOL) exceeds this. 0 = no cap (off). */
+  maxDevBuySol: 0,
   /** Only detect tokens with market cap at least this (USD). 0 = no min. */
   minMarketCapUsd: 3000,
   /** Only detect tokens with market cap at most this (USD). 0 = no max. */
