@@ -8,8 +8,9 @@
 // (one call for all held mints).
 // -----------------------------------------------------------------------------
 
-import { Connection, PublicKey } from '@solana/web3.js'
+import { PublicKey } from '@solana/web3.js'
 import { Buffer } from 'buffer'
+import { pooledGetMultipleAccounts } from './rpc'
 
 /** pump.fun program id. */
 const PUMP_PROGRAM = new PublicKey(
@@ -35,7 +36,6 @@ function bondingCurvePda(mint: PublicKey): PublicKey {
  * DexScreener.
  */
 export async function fetchBondingCurvePrices(
-  connection: Connection,
   mints: string[],
 ): Promise<Map<string, number>> {
   const out = new Map<string, number>()
@@ -54,15 +54,12 @@ export async function fetchBondingCurvePrices(
   // getMultipleAccountsInfo caps at 100 accounts per call; chunk defensively.
   for (let i = 0; i < entries.length; i += 100) {
     const chunk = entries.slice(i, i + 100)
-    let infos
-    try {
-      infos = await connection.getMultipleAccountsInfo(
-        chunk.map((e) => e.pda),
-        'processed',
-      )
-    } catch {
-      continue
-    }
+    // Round-robined across all free RPCs with failover (see lib/rpc.ts).
+    const infos = await pooledGetMultipleAccounts(
+      chunk.map((e) => e.pda),
+      'processed',
+    )
+    if (!infos) continue
     for (let j = 0; j < chunk.length; j++) {
       const info = infos[j]
       if (!info || !info.data) continue

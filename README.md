@@ -80,21 +80,25 @@ Open the printed localhost URL, click **CONNECT WITH PRIVY**, and a Solana
 embedded wallet is created for you automatically. **Fund that wallet's address
 with SOL** (shown in the header), tune your config, then press **START ENGINE**.
 
-### RPC endpoint
+### RPC endpoints (multi-RPC, no setup)
 
-Runs on mainnet with **free, no-key RPCs** out of the box — no setup. Reads and
-confirmations use [PublicNode](https://publicnode.com), and every buy/sell is
-**sprayed to several free RPCs in parallel** (PublicNode, dRPC, Omnia); the first
-that accepts the transaction wins. This is what fixes `broadcast failed: 403` —
-the bare `api.mainnet-beta.solana.com` endpoint refuses sends, so relying on any
-single free RPC is fragile; spraying routes around whichever one is blocking or
-throttling, and also lands the tx faster.
+Runs on mainnet with a **pool of free, no-key RPCs** out of the box — no setup:
 
-Free RPCs are still rate-limited and not ideal for competitive sniping. For real
-use set `VITE_SOLANA_RPC` in `.env.local` to a paid RPC
+- **Reads** (on-chain bonding-curve price polls, balances) are **round-robined
+  across the whole pool** (PublicNode, official, dRPC, Omnia, Ankr, OnFinality,
+  rpcpool) with a per-request timeout and automatic failover. Spreading the load
+  means no single endpoint gets rate-limited, and failing past a slow/erroring
+  one means the price poll never stalls — so PnL stays live with no limit/delay.
+- **Sends** (every buy/sell) are **sprayed to all send-capable free RPCs in
+  parallel**; the first to accept the tx wins. This routes around any RPC that
+  blocks or throttles `sendTransaction` (the cause of `broadcast failed: 403`)
+  and lands the tx faster.
+
+Free RPCs are still slower than dedicated infra. For competitive sniping set
+`VITE_SOLANA_RPC` in `.env.local` to a paid RPC
 ([Helius](https://helius.dev), [QuickNode](https://quicknode.com),
-[Triton](https://triton.one)) — it's then tried first in the spray. If every RPC
-refuses a send you'll see a hint in the console pointing you to do this.
+[Triton](https://triton.one)) — it's placed first in both the read pool and the
+send spray.
 
 ### Hands-free (no-confirmation) trading
 

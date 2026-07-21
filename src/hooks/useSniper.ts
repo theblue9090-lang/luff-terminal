@@ -8,17 +8,15 @@
 // broadcast through one warm RPC connection.
 // -----------------------------------------------------------------------------
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Connection, PublicKey } from '@solana/web3.js'
+import { useCallback, useEffect, useRef } from 'react'
+import { PublicKey } from '@solana/web3.js'
 import { useSolanaWallets, useSignTransaction } from '@privy-io/react-auth/solana'
 import {
   BLOCKED_MINTS,
   DEX_MAX_AGE_MIN,
   FEE_BUFFER_SOL,
   PUMPPORTAL_HAS_KEY,
-  RPC_ENDPOINT,
   SNIPEABLE_POOLS,
-  wsFromHttp,
   type SnipeConfig,
 } from '../config'
 import type { Position, TokenEvent } from '../types'
@@ -30,6 +28,7 @@ import {
   fetchSolPriceUsd,
 } from '../lib/dexscreener'
 import { fetchBondingCurvePrices } from '../lib/pumpfun'
+import { primaryConnection, readPoolSize } from '../lib/rpc'
 import { confirmSignature, executeTrade, type SignFn } from '../lib/trade'
 import { fmtSol, shortAddr } from '../lib/format'
 
@@ -139,15 +138,9 @@ export function useSniper(): SniperApi {
     ) ?? wallets[0]
   const address = wallet?.address
 
-  // One warm connection to the (free by default) mainnet RPC.
-  const connection = useMemo(
-    () =>
-      new Connection(RPC_ENDPOINT, {
-        commitment: 'confirmed',
-        wsEndpoint: wsFromHttp(RPC_ENDPOINT),
-      }),
-    [],
-  )
+  // Primary connection from the pooled RPC list (used for signing context,
+  // confirmation, and balance). Price reads round-robin across the whole pool.
+  const connection = primaryConnection
 
   // Keep the latest signer / address in refs so hot-path callbacks stay stable.
   const signRef = useRef(signTransaction)
@@ -562,7 +555,7 @@ export function useSniper(): SniperApi {
 
     const [pumpPrices, otherPrices] = await Promise.all([
       pumpMints.length
-        ? fetchBondingCurvePrices(connection, pumpMints)
+        ? fetchBondingCurvePrices(pumpMints)
         : Promise.resolve(new Map<string, number>()),
       otherMints.length
         ? fetchPricesSol(otherMints)
@@ -604,7 +597,7 @@ export function useSniper(): SniperApi {
         void sellPosition(p.id, 'stop-loss')
       }
     }
-  }, [connection, sellPosition])
+  }, [sellPosition])
 
   pollRef.current = () => void pollPrices()
 
@@ -623,6 +616,10 @@ export function useSniper(): SniperApi {
     }
     g.setRunning(true)
     g.log('system', 'ENGINE START — scanning pump.fun + dexscreener')
+    g.log(
+      'info',
+      `RPC pool: ${readPoolSize} free endpoints (round-robin + failover)`,
+    )
     g.log(
       'info',
       PUMPPORTAL_HAS_KEY

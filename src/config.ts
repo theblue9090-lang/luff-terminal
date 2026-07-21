@@ -30,14 +30,38 @@ export const RPC_WS_ENDPOINT: string | undefined = env.VITE_SOLANA_RPC_WS as
   | string
   | undefined
 
+const PUBLIC_MAINNET = 'https://api.mainnet-beta.solana.com'
+
+/**
+ * Every free, no-key Solana RPC we know that is browser-reachable (CORS `*`).
+ * Reads (on-chain bonding-curve price polls, balances) are round-robined across
+ * this pool with failover, so no single endpoint is rate-limited and a slow one
+ * never stalls the poll — see src/lib/rpc.ts. VITE_SOLANA_RPC (a paid RPC) is
+ * placed first when set.
+ */
+export const READ_RPCS: string[] = Array.from(
+  new Set(
+    [
+      RPC_ENDPOINT,
+      'https://solana-rpc.publicnode.com',
+      PUBLIC_MAINNET,
+      'https://solana.drpc.org',
+      'https://endpoints.omniatech.io/v1/sol/mainnet/public',
+      'https://rpc.ankr.com/solana',
+      'https://solana.api.onfinality.io/public',
+      'https://api.mainnet.rpcpool.com',
+    ].filter(Boolean),
+  ),
+)
+
 /**
  * Endpoints a signed transaction is sprayed to when broadcasting. We fire the
- * same signed tx at several free, no-key RPCs in parallel and take the first
- * that accepts it — resilient to any single RPC blocking `sendTransaction`
- * (which is exactly why the bare public endpoint returned 403), and it also
- * lands the tx faster. Duplicate sends of an identical signature are deduped by
- * the network, so spraying is safe. api.mainnet-beta is excluded because it
- * rejects sends. Your VITE_SOLANA_RPC (a paid RPC) is tried first when set.
+ * same signed tx at every free, no-key RPC that accepts sends in parallel and
+ * take the first that succeeds — resilient to any single RPC blocking or
+ * rate-limiting `sendTransaction`, and it lands the tx faster. Duplicate sends
+ * of an identical signature are deduped by the network, so spraying is safe.
+ * api.mainnet-beta is excluded because it rejects sends. VITE_SOLANA_RPC (paid)
+ * is tried first when set.
  */
 export const SEND_RPCS: string[] = Array.from(
   new Set(
@@ -46,7 +70,10 @@ export const SEND_RPCS: string[] = Array.from(
       'https://solana-rpc.publicnode.com',
       'https://solana.drpc.org',
       'https://endpoints.omniatech.io/v1/sol/mainnet/public',
-    ].filter((u) => u && u !== 'https://api.mainnet-beta.solana.com'),
+      'https://rpc.ankr.com/solana',
+      'https://solana.api.onfinality.io/public',
+      'https://api.mainnet.rpcpool.com',
+    ].filter((u) => u && u !== PUBLIC_MAINNET),
   ),
 )
 
