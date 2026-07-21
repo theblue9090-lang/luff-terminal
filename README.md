@@ -27,11 +27,11 @@ can react in milliseconds.
     price/liquidity.
 - **Auto-snipe** — automatically buy any new token that passes your filters
   (max dev-buy, min liquidity, max open positions).
-- **Live position PnL** — held-position prices are polled from DexScreener
-  (~5s, free, no key) so PnL keeps moving after a buy. Set
-  `VITE_PUMPPORTAL_API_KEY` to additionally get PumpPortal's real-time per-token
-  trade stream (that stream is metered and needs a key; polling is the key-free
-  default).
+- **Real-time position PnL** — pump.fun prices are read straight from the
+  on-chain **bonding curve** over RPC (no indexing delay — PnL is live within an
+  RPC round-trip of the fill, and a buy triggers an immediate read), refreshed
+  every ~2s; non-pump tokens use DexScreener. Set `VITE_PUMPPORTAL_API_KEY` to
+  also get PumpPortal's real-time trade stream.
 - **Auto take-profit / stop-loss** — positions are auto-sold when your TP/SL
   triggers, driven by the same live price updates.
 - **No-confirmation auto-buy** — the embedded wallet signs every buy/sell
