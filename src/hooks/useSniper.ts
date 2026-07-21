@@ -24,36 +24,62 @@ import {
 import type { Position, TokenEvent } from '../types'
 import { useStore } from '../state/store'
 import { pumpPortal, type TradeUpdate } from '../lib/pumpportal'
-import { DexScreenerPoller, fetchPricesSol } from '../lib/dexscreener'
+import {
+  DexScreenerPoller,
+  fetchPricesSol,
+  fetchSolPriceUsd,
+} from '../lib/dexscreener'
 import { confirmSignature, executeTrade, type SignFn } from '../lib/trade'
 import { fmtSol, shortAddr } from '../lib/format'
 
 /** Position states that are live and need price/PnL tracking. */
 const LIVE_STATES = new Set(['open', 'buying', 'selling'])
 
-function passesFilters(t: TokenEvent, cfg: SnipeConfig): boolean {
+/**
+ * Fill in USD market cap / liquidity. DexScreener tokens already carry USD;
+ * pump.fun tokens report SOL, so convert with the live SOL price.
+ */
+function withUsd(t: TokenEvent, solUsd: number | null): TokenEvent {
+  const marketCapUsd =
+    t.marketCapUsd ??
+    (t.marketCapSol != null && solUsd ? t.marketCapSol * solUsd : undefined)
+  const liquidityUsd =
+    t.liquidityUsd ??
+    (t.vSolInBondingCurve != null && solUsd
+      ? t.vSolInBondingCurve * solUsd
+      : undefined)
+  return { ...t, marketCapUsd, liquidityUsd }
+}
+
+/** Detection gate: only surface tokens within the configured USD mcap/liq. */
+function passesDetection(t: TokenEvent, cfg: SnipeConfig): boolean {
+  if (
+    cfg.minMarketCapUsd > 0 &&
+    t.marketCapUsd != null &&
+    t.marketCapUsd < cfg.minMarketCapUsd
+  ) {
+    return false
+  }
+  if (
+    cfg.maxMarketCapUsd > 0 &&
+    t.marketCapUsd != null &&
+    t.marketCapUsd > cfg.maxMarketCapUsd
+  ) {
+    return false
+  }
+  if (
+    cfg.minLiquidityUsd > 0 &&
+    t.liquidityUsd != null &&
+    t.liquidityUsd < cfg.minLiquidityUsd
+  ) {
+    return false
+  }
+  return true
+}
+
+/** Extra gate applied only before an auto-buy (pump.fun dev-buy safety). */
+function passesSnipe(t: TokenEvent, cfg: SnipeConfig): boolean {
   if (cfg.maxDevBuySol > 0 && t.devBuySol != null && t.devBuySol > cfg.maxDevBuySol) {
-    return false
-  }
-  if (
-    cfg.minLiquiditySol > 0 &&
-    t.vSolInBondingCurve != null &&
-    t.vSolInBondingCurve < cfg.minLiquiditySol
-  ) {
-    return false
-  }
-  if (
-    cfg.minMarketCapSol > 0 &&
-    t.marketCapSol != null &&
-    t.marketCapSol < cfg.minMarketCapSol
-  ) {
-    return false
-  }
-  if (
-    cfg.maxMarketCapSol > 0 &&
-    t.marketCapSol != null &&
-    t.marketCapSol > cfg.maxMarketCapSol
-  ) {
     return false
   }
   return true
@@ -445,13 +471,16 @@ export function useSniper(): SniperApi {
   )
 
   const onNewToken = useCallback(
-    (t: TokenEvent) => {
+    (raw: TokenEvent) => {
       // Never surface or trade base assets / stables that can't be sniped.
-      if (BLOCKED_MINTS.has(t.mint)) return
+      if (BLOCKED_MINTS.has(raw.mint)) return
       const s = useStore.getState()
+      const t = withUsd(raw, s.solUsd)
+      // Detection gate: only new coins within the configured USD mcap/liquidity.
+      if (!passesDetection(t, s.config)) return
       s.pushToken(t)
       if (!s.running || !s.config.autoSnipe) return
-      if (!passesFilters(t, s.config)) return
+      if (!passesSnipe(t, s.config)) return
       // DexScreener entries must be fresh + on a snipeable pool to auto-buy.
       if (t.source === 'dexscreener' && !isDexSnipeable(t)) return
       void snipe(t, true)
@@ -488,6 +517,21 @@ export function useSniper(): SniperApi {
     const id = setInterval(refreshBalance, 15000)
     return () => clearInterval(id)
   }, [address, refreshBalance])
+
+  // Keep a live SOL/USD price so pump.fun SOL values can be filtered in USD.
+  useEffect(() => {
+    const ac = new AbortController()
+    const load = () =>
+      fetchSolPriceUsd(ac.signal).then((p) => {
+        if (p) useStore.getState().setSolUsd(p)
+      })
+    void load()
+    const id = setInterval(() => void load(), 30000)
+    return () => {
+      clearInterval(id)
+      ac.abort()
+    }
+  }, [])
 
   // Live PnL for held positions. PumpPortal's per-token trade stream needs a
   // paid API key, so we poll DexScreener prices for every open position — this

@@ -44,6 +44,10 @@ interface SniperState {
   balanceSol: number | null
   setBalance: (b: number | null) => void
 
+  // live SOL/USD price (for converting pump.fun SOL values to USD filters)
+  solUsd: number | null
+  setSolUsd: (p: number | null) => void
+
   // running flag for the engine
   running: boolean
   setRunning: (r: boolean) => void
@@ -112,6 +116,9 @@ export const useStore = create<SniperState>((set) => ({
 
   balanceSol: null,
   setBalance: (b) => set({ balanceSol: b }),
+
+  solUsd: null,
+  setSolUsd: (p) => set({ solUsd: p }),
 
   running: false,
   setRunning: (r) => set({ running: r }),

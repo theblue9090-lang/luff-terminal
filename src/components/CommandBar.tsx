@@ -23,7 +23,10 @@ const NUMERIC_KEYS: (keyof SnipeConfig)[] = [
   'stopLossPct',
   'maxOpenPositions',
   'maxDevBuySol',
-  'minLiquiditySol',
+  'minMarketCapUsd',
+  'maxMarketCapUsd',
+  'minLiquidityUsd',
+  'maxSpendSol',
 ]
 
 export function CommandBar({ api }: { api: SniperApi }) {

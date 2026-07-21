@@ -119,9 +119,13 @@ All settings are editable live in the left panel (or via the `set` command):
 | Priority (SOL) | Priority fee — **higher = faster inclusion**, more cost |
 | Take profit % | Auto-sell when a position gains this much |
 | Stop loss % | Auto-sell when a position loses this much |
+| Min / Max mcap ($) | Only DETECT coins within this market-cap range, USD (0 = off). Default min $3k |
+| Min liq ($) | Only detect coins with at least this liquidity, USD (0 = off). Default $2k |
 | Max dev buy (SOL) | Skip pump.fun tokens whose creator bought more than this (0 = off) |
-| Min liq (SOL) | Skip tokens with less bonding-curve liquidity (0 = off) |
-| Min / Max mcap (SOL) | Only snipe tokens within this market-cap range (0 = off). New pump.fun tokens start ~30◎ |
+
+Market-cap and liquidity are filtered in **USD** and applied at *detection* — coins
+outside the range never appear in the feed. DexScreener reports USD directly;
+pump.fun values (reported in SOL) are converted using a live SOL/USD price.
 
 Environment variables (see `.env.example`):
 

@@ -115,6 +115,7 @@ export async function enrichMint(
       pool: dexToPool(best.dexId),
       priceSol: Number.isFinite(priceSol) ? priceSol : undefined,
       liquidityUsd: best.liquidity?.usd,
+      marketCapUsd: best.marketCap ?? best.fdv,
       pairCreatedAt: best.pairCreatedAt,
       marketCapSol,
     }
@@ -164,6 +165,28 @@ export async function fetchPricesSol(
     /* transient — caller retries next tick */
   }
   return out
+}
+
+/** Current SOL price in USD, used to convert pump.fun SOL values to USD. */
+export async function fetchSolPriceUsd(
+  signal?: AbortSignal,
+): Promise<number | undefined> {
+  try {
+    const data = await getJson<{ pairs?: DsPair[] } | DsPair[]>(
+      `${DEXSCREENER_BASE}/latest/dex/tokens/${SOL_MINT}`,
+      signal,
+    )
+    const pairs = Array.isArray(data) ? data : (data.pairs ?? [])
+    const sol = pairs.filter((p) => p.chainId === 'solana' && p.priceUsd)
+    if (sol.length === 0) return undefined
+    const best = sol.reduce((a, b) =>
+      (b.liquidity?.usd ?? 0) > (a.liquidity?.usd ?? 0) ? b : a,
+    )
+    const px = Number(best.priceUsd)
+    return Number.isFinite(px) && px > 0 ? px : undefined
+  } catch {
+    return undefined
+  }
 }
 
 type NewTokenHandler = (t: TokenEvent) => void

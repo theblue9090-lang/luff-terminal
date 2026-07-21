@@ -189,12 +189,12 @@ export const DEFAULT_SNIPE = {
   maxOpenPositions: 3,
   /** Reject tokens whose initial dev buy (SOL) exceeds this. 0 = no cap. */
   maxDevBuySol: 2,
-  /** Only snipe tokens with at least this initial liquidity (SOL). */
-  minLiquiditySol: 0,
-  /** Only snipe tokens with market cap at least this (SOL). 0 = no min. */
-  minMarketCapSol: 0,
-  /** Only snipe tokens with market cap at most this (SOL). 0 = no max. */
-  maxMarketCapSol: 0,
+  /** Only detect tokens with market cap at least this (USD). 0 = no min. */
+  minMarketCapUsd: 3000,
+  /** Only detect tokens with market cap at most this (USD). 0 = no max. */
+  maxMarketCapUsd: 0,
+  /** Only detect tokens with at least this liquidity (USD). 0 = no min. */
+  minLiquidityUsd: 2000,
   /** Cumulative SOL this session may spend on buys. 0 = unlimited. */
   maxSpendSol: 1,
 }

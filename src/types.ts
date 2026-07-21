@@ -32,8 +32,10 @@ export interface TokenEvent {
   vSolInBondingCurve?: number
   /** Virtual token reserves in the bonding curve (pump). */
   vTokensInBondingCurve?: number
-  /** Liquidity in USD (dexscreener). */
+  /** Liquidity in USD (dexscreener, or derived from SOL reserves). */
   liquidityUsd?: number
+  /** Market cap in USD (dexscreener, or derived via SOL price). */
+  marketCapUsd?: number
   /** Pair creation time (ms) from dexscreener, used to gate freshness. */
   pairCreatedAt?: number
   /** Metadata / image URI when available. */
