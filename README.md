@@ -121,6 +121,7 @@ All settings are editable live in the left panel (or via the `set` command):
 | Stop loss % | Auto-sell when a position loses this much |
 | Max dev buy (SOL) | Skip pump.fun tokens whose creator bought more than this (0 = off) |
 | Min liq (SOL) | Skip tokens with less bonding-curve liquidity (0 = off) |
+| Min / Max mcap (SOL) | Only snipe tokens within this market-cap range (0 = off). New pump.fun tokens start ~30◎ |
 
 Environment variables (see `.env.example`):
 

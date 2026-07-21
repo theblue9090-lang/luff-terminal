@@ -42,6 +42,20 @@ function passesFilters(t: TokenEvent, cfg: SnipeConfig): boolean {
   ) {
     return false
   }
+  if (
+    cfg.minMarketCapSol > 0 &&
+    t.marketCapSol != null &&
+    t.marketCapSol < cfg.minMarketCapSol
+  ) {
+    return false
+  }
+  if (
+    cfg.maxMarketCapSol > 0 &&
+    t.marketCapSol != null &&
+    t.marketCapSol > cfg.maxMarketCapSol
+  ) {
+    return false
+  }
   return true
 }
 

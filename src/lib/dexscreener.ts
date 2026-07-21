@@ -94,6 +94,21 @@ export async function enrichMint(
       quoteIsSol && best.priceNative
         ? Number(best.priceNative)
         : undefined
+    // Derive market cap in SOL: solUsd = priceUsd / priceNative (SOL-quoted).
+    let marketCapSol: number | undefined
+    if (
+      quoteIsSol &&
+      best.marketCap != null &&
+      best.priceUsd &&
+      best.priceNative
+    ) {
+      const pn = Number(best.priceNative)
+      const pu = Number(best.priceUsd)
+      const solUsd = pn > 0 ? pu / pn : 0
+      if (solUsd > 0 && Number.isFinite(solUsd)) {
+        marketCapSol = best.marketCap / solUsd
+      }
+    }
     return {
       name: best.baseToken.name,
       symbol: best.baseToken.symbol,
@@ -101,7 +116,7 @@ export async function enrichMint(
       priceSol: Number.isFinite(priceSol) ? priceSol : undefined,
       liquidityUsd: best.liquidity?.usd,
       pairCreatedAt: best.pairCreatedAt,
-      marketCapSol: undefined,
+      marketCapSol,
     }
   } catch {
     return null

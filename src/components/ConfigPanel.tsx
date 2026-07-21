@@ -93,14 +93,20 @@ export function ConfigPanel() {
           <NumField label="min liq (SOL)" k="minLiquiditySol" step="0.1" />
         </div>
 
+        <div className="field-row">
+          <NumField label="min mcap (SOL)" k="minMarketCapSol" step="1" />
+          <NumField label="max mcap (SOL)" k="maxMarketCapSol" step="1" />
+        </div>
+
         <div className="field">
           <NumField label="session spend cap (SOL)" k="maxSpendSol" step="0.1" />
         </div>
 
         <div className="muted mono-xs" style={{ marginTop: 8, lineHeight: 1.6 }}>
           higher priority fee = faster inclusion but higher cost. filters of 0
-          are ignored. dev-buy filter only applies to pump.fun events. the spend
-          cap limits total SOL spent on buys this session (0 = unlimited).
+          are ignored. market-cap range filters by token mcap in SOL (new
+          pump.fun tokens start ~30◎). dev-buy filter only applies to pump.fun
+          events. the spend cap limits total SOL spent on buys this session.
         </div>
       </div>
     </div>

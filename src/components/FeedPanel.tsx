@@ -44,6 +44,7 @@ export function FeedPanel({ api }: { api: SniperApi }) {
                 </div>
                 <div className="sub">
                   {shortAddr(t.mint, 6, 6)}
+                  {t.marketCapSol != null && ` · mc ${fmtSol(t.marketCapSol)}◎`}
                   {t.devBuySol != null && ` · dev ${fmtSol(t.devBuySol)}◎`}
                   {t.liquidityUsd != null &&
                     ` · liq $${Math.round(t.liquidityUsd).toLocaleString()}`}

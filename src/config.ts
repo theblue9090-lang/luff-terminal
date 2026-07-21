@@ -191,6 +191,10 @@ export const DEFAULT_SNIPE = {
   maxDevBuySol: 2,
   /** Only snipe tokens with at least this initial liquidity (SOL). */
   minLiquiditySol: 0,
+  /** Only snipe tokens with market cap at least this (SOL). 0 = no min. */
+  minMarketCapSol: 0,
+  /** Only snipe tokens with market cap at most this (SOL). 0 = no max. */
+  maxMarketCapSol: 0,
   /** Cumulative SOL this session may spend on buys. 0 = unlimited. */
   maxSpendSol: 1,
 }
