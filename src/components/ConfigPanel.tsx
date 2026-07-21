@@ -1,45 +1,5 @@
-import { useState } from 'react'
 import { useStore } from '../state/store'
-import { PUBLIC_RPC, type SnipeConfig } from '../config'
-
-function RpcField() {
-  const rpcUrl = useStore((s) => s.rpcUrl)
-  const setRpcUrl = useStore((s) => s.setRpcUrl)
-  const [draft, setDraft] = useState(rpcUrl)
-  const isPublic = rpcUrl === PUBLIC_RPC
-  const dirty = draft.trim() !== rpcUrl
-
-  return (
-    <div className="field">
-      <label>⚙ solana rpc endpoint</label>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <input
-          value={draft}
-          spellCheck={false}
-          placeholder="https://mainnet.helius-rpc.com/?api-key=…"
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') setRpcUrl(draft)
-          }}
-        />
-        <button
-          className="btn sm primary"
-          disabled={!dirty}
-          onClick={() => setRpcUrl(draft)}
-          title="save RPC"
-        >
-          save
-        </button>
-      </div>
-      {isPublic && (
-        <div className="log-warn mono-xs" style={{ marginTop: 4, lineHeight: 1.5 }}>
-          ⚠ public RPC blocks transaction sends (403). Paste a paid RPC (Helius /
-          QuickNode / Triton) and press save.
-        </div>
-      )}
-    </div>
-  )
-}
+import type { SnipeConfig } from '../config'
 
 function Toggle({
   label,
@@ -98,8 +58,6 @@ export function ConfigPanel() {
         <span className="title">⚙ snipe config</span>
       </div>
       <div className="panel-body pad">
-        <RpcField />
-
         <Toggle
           label="AUTO-SNIPE new tokens"
           value={config.autoSnipe}

@@ -10,7 +10,6 @@ const HELP = [
   '  start | stop          toggle the detection engine',
   '  closeall              sell every open position',
   '  set <key> <value>     e.g. set buyAmountSol 0.1 · set takeProfitPct 80',
-  '  rpc <url>             set the Solana RPC endpoint (persisted)',
   '  auto on|off           toggle auto-snipe',
   '  clear                 clear the console',
   '  help                  show this',
@@ -90,15 +89,6 @@ export function CommandBar({ api }: { api: SniperApi }) {
         const on = args[0]?.toLowerCase() === 'on'
         g.setConfig({ autoSnipe: on })
         log('system', `auto-snipe ${on ? 'ENABLED' : 'disabled'}`)
-        break
-      }
-      case 'rpc': {
-        if (!args[0]) {
-          log('info', `current rpc: ${g.rpcUrl}`)
-          break
-        }
-        g.setRpcUrl(args[0])
-        log('system', `rpc set to ${useStore.getState().rpcUrl}`)
         break
       }
       case 'set': {

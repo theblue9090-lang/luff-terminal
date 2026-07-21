@@ -71,15 +71,16 @@ Open the printed localhost URL, click **CONNECT WITH PRIVY**, and a Solana
 embedded wallet is created for you automatically. **Fund that wallet's address
 with SOL** (shown in the header), tune your config, then press **START ENGINE**.
 
-### ⚠️ Set a real RPC first (fixes `broadcast failed: 403`)
+### RPC endpoint
 
-The public RPC (`api.mainnet-beta.solana.com`) **blocks transaction sends** and
-returns `403 Access forbidden`, so buys can't broadcast. Paste a paid RPC into
-the **⚙ SOLANA RPC ENDPOINT** field at the top of the config panel (or run
-`rpc <url>` in the command bar) and press **save** — it's stored in your browser
-and applied immediately, no rebuild needed. Get a free/paid key from
-[Helius](https://helius.dev), [QuickNode](https://quicknode.com), or
-[Triton](https://triton.one). You can also set `VITE_SOLANA_RPC` in `.env.local`.
+Ships with a **free, no-key public RPC** ([PublicNode](https://publicnode.com),
+`https://solana-rpc.publicnode.com`) that — unlike `api.mainnet-beta.solana.com`
+— accepts transaction sends, so buys broadcast out of the box on mainnet with no
+setup. It is rate-limited and not ideal for competitive sniping: for real use,
+set `VITE_SOLANA_RPC` in `.env.local` to a paid RPC
+([Helius](https://helius.dev), [QuickNode](https://quicknode.com),
+[Triton](https://triton.one)). If the free RPC throttles a send you'll see a
+`403/429` hint in the console pointing you to do this.
 
 ### Hands-free (no-confirmation) trading
 

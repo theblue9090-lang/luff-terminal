@@ -1,12 +1,5 @@
 import { create } from 'zustand'
-import {
-  DEFAULT_SNIPE,
-  loadConfig,
-  loadRpcUrl,
-  saveConfig,
-  saveRpcUrl,
-  type SnipeConfig,
-} from '../config'
+import { DEFAULT_SNIPE, loadConfig, saveConfig, type SnipeConfig } from '../config'
 import type {
   FeedStatus,
   LogEntry,
@@ -24,10 +17,6 @@ interface SniperState {
   // config
   config: SnipeConfig
   setConfig: (patch: Partial<SnipeConfig>) => void
-
-  // solana RPC endpoint (runtime-configurable, persisted)
-  rpcUrl: string
-  setRpcUrl: (url: string) => void
 
   // logs
   logs: LogEntry[]
@@ -76,14 +65,6 @@ export const useStore = create<SniperState>((set) => ({
       const config = { ...s.config, ...patch }
       saveConfig(config)
       return { config }
-    }),
-
-  rpcUrl: loadRpcUrl(),
-  setRpcUrl: (url) =>
-    set(() => {
-      const trimmed = url.trim()
-      saveRpcUrl(trimmed)
-      return { rpcUrl: trimmed || loadRpcUrl() }
     }),
 
   logs: [],

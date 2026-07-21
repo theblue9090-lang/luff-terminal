@@ -13,13 +13,17 @@ export const PRIVY_APP_ID: string =
   (env.VITE_PRIVY_APP_ID as string | undefined) ?? 'cmrpmbbsc00f50djv46ahai5g'
 
 /**
- * Solana mainnet RPC endpoint. The public endpoint is heavily rate limited and
- * NOT suitable for competitive sniping — set VITE_SOLANA_RPC to a paid RPC
- * (Helius / QuickNode / Triton) for real use.
+ * Solana mainnet RPC endpoint.
+ *
+ * Defaults to PublicNode — a FREE, no-key public RPC that (unlike
+ * api.mainnet-beta.solana.com) accepts `sendTransaction`, so buys can actually
+ * broadcast out of the box. It is rate-limited and not ideal for competitive
+ * sniping; set VITE_SOLANA_RPC to a paid RPC (Helius / QuickNode / Triton) for
+ * real use.
  */
 export const RPC_ENDPOINT: string =
   (env.VITE_SOLANA_RPC as string | undefined) ??
-  'https://api.mainnet-beta.solana.com'
+  'https://solana-rpc.publicnode.com'
 
 /** Optional dedicated WebSocket RPC (falls back to deriving from RPC_ENDPOINT). */
 export const RPC_WS_ENDPOINT: string | undefined = env.VITE_SOLANA_RPC_WS as
@@ -100,9 +104,6 @@ export const SOLANA_CLUSTERS = [
   { name: 'mainnet-beta' as const, rpcUrl: RPC_ENDPOINT },
 ]
 
-/** The public endpoint rejects transaction sends — used to warn the user. */
-export const PUBLIC_RPC = 'https://api.mainnet-beta.solana.com'
-
 /** Derive a WebSocket RPC URL from an HTTP(S) one. */
 export function wsFromHttp(url: string): string | undefined {
   if (RPC_WS_ENDPOINT) return RPC_WS_ENDPOINT
@@ -112,27 +113,6 @@ export function wsFromHttp(url: string): string | undefined {
     return u.toString()
   } catch {
     return undefined
-  }
-}
-
-const RPC_STORAGE_KEY = 'luff.rpcUrl'
-
-/** Load the user's saved RPC override, falling back to the env/default. */
-export function loadRpcUrl(): string {
-  try {
-    return localStorage.getItem(RPC_STORAGE_KEY) || RPC_ENDPOINT
-  } catch {
-    return RPC_ENDPOINT
-  }
-}
-
-/** Persist the user's RPC override (empty string clears it). */
-export function saveRpcUrl(url: string): void {
-  try {
-    if (url) localStorage.setItem(RPC_STORAGE_KEY, url)
-    else localStorage.removeItem(RPC_STORAGE_KEY)
-  } catch {
-    /* ignore */
   }
 }
 

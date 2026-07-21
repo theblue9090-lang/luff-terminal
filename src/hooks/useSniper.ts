@@ -15,6 +15,7 @@ import {
   BLOCKED_MINTS,
   DEX_MAX_AGE_MIN,
   FEE_BUFFER_SOL,
+  RPC_ENDPOINT,
   SNIPEABLE_POOLS,
   wsFromHttp,
   type SnipeConfig,
@@ -53,14 +54,14 @@ function isDexSnipeable(t: TokenEvent): boolean {
 
 /** Turn a raw trade error into an actionable one-liner. */
 function errorHint(msg: string): string {
-  if (/403|forbidden/i.test(msg)) {
-    return ' — RPC rejected the send. Set a working RPC in the ⚙ RPC field (the public endpoint blocks sends).'
+  if (/403|forbidden|429|rate/i.test(msg)) {
+    return ' — RPC rejected/rate-limited the send. The free RPC is throttling; set VITE_SOLANA_RPC to a paid RPC (Helius / QuickNode / Triton).'
   }
   if (/trade-local 400|bad request/i.test(msg)) {
     return ' — token not snipeable on this pool (already migrated, or not a pump/raydium token).'
   }
   if (/timed out|timeout/i.test(msg)) {
-    return ' — request timed out; check your RPC/network.'
+    return ' — request timed out; the free RPC may be busy.'
   }
   return ''
 }
@@ -90,15 +91,14 @@ export function useSniper(): SniperApi {
     ) ?? wallets[0]
   const address = wallet?.address
 
-  // RPC is runtime-configurable; the connection rebuilds when the user changes it.
-  const rpcUrl = useStore((s) => s.rpcUrl)
+  // One warm connection to the (free by default) mainnet RPC.
   const connection = useMemo(
     () =>
-      new Connection(rpcUrl, {
+      new Connection(RPC_ENDPOINT, {
         commitment: 'confirmed',
-        wsEndpoint: wsFromHttp(rpcUrl),
+        wsEndpoint: wsFromHttp(RPC_ENDPOINT),
       }),
-    [rpcUrl],
+    [],
   )
 
   // Keep the latest signer / address in refs so hot-path callbacks stay stable.
