@@ -177,13 +177,34 @@ export async function fetchSolPriceUsd(
       signal,
     )
     const pairs = Array.isArray(data) ? data : (data.pairs ?? [])
-    const sol = pairs.filter((p) => p.chainId === 'solana' && p.priceUsd)
-    if (sol.length === 0) return undefined
-    const best = sol.reduce((a, b) =>
+    // Keep only pairs that actually involve SOL and have a USD price.
+    const rel = pairs.filter(
+      (p) =>
+        p.chainId === 'solana' &&
+        p.priceUsd &&
+        (p.baseToken.address === SOL_MINT ||
+          p.quoteToken.address === SOL_MINT),
+    )
+    if (rel.length === 0) return undefined
+    const best = rel.reduce((a, b) =>
       (b.liquidity?.usd ?? 0) > (a.liquidity?.usd ?? 0) ? b : a,
     )
-    const px = Number(best.priceUsd)
-    return Number.isFinite(px) && px > 0 ? px : undefined
+    // If SOL is the base token, priceUsd IS the SOL price. If SOL is the quote,
+    // priceUsd/priceNative = (base in USD)/(base in SOL) = USD per SOL.
+    let sol: number | undefined
+    if (best.baseToken.address === SOL_MINT) {
+      sol = Number(best.priceUsd)
+    } else {
+      const pn = Number(best.priceNative)
+      const pu = Number(best.priceUsd)
+      sol = pn > 0 ? pu / pn : undefined
+    }
+    // Sanity clamp: reject obviously-wrong values so a bad pair can't poison
+    // the USD filters (which was the cause of "detects nothing").
+    if (sol == null || !Number.isFinite(sol) || sol < 1 || sol > 100000) {
+      return undefined
+    }
+    return sol
   } catch {
     return undefined
   }
