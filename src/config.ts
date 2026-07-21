@@ -51,13 +51,24 @@ export const SEND_RPCS: string[] = Array.from(
 )
 
 /**
- * PumpPortal real-time data websocket. Free for subscribeNewToken /
- * subscribeTokenTrade. An api-key is only needed for the Lightning trade API,
- * which this app does not use (we self-sign via trade-local).
+ * Optional PumpPortal API key. `subscribeNewToken` is free, but the per-token
+ * `subscribeTokenTrade` stream (used for real-time held-position prices) is
+ * metered and REQUIRES a key. Without one we fall back to polling DexScreener
+ * for position prices, so PnL still updates — just a bit slower. Set
+ * VITE_PUMPPORTAL_API_KEY to enable the faster real-time trade stream.
  */
-export const PUMPPORTAL_WS: string =
+export const PUMPPORTAL_API_KEY: string | undefined =
+  (env.VITE_PUMPPORTAL_API_KEY as string | undefined) || undefined
+
+export const PUMPPORTAL_HAS_KEY = !!PUMPPORTAL_API_KEY
+
+/** PumpPortal real-time data websocket (api-key appended when configured). */
+const PP_WS_BASE =
   (env.VITE_PUMPPORTAL_WS as string | undefined) ??
   'wss://pumpportal.fun/api/data'
+export const PUMPPORTAL_WS: string = PUMPPORTAL_API_KEY
+  ? `${PP_WS_BASE}?api-key=${encodeURIComponent(PUMPPORTAL_API_KEY)}`
+  : PP_WS_BASE
 
 /**
  * PumpPortal "local" trade endpoint. Returns a serialized, unsigned

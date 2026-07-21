@@ -108,6 +108,49 @@ export async function enrichMint(
   }
 }
 
+/**
+ * Batch-fetch current SOL prices for many mints in one request. This is the
+ * key-free way to keep held-position PnL live: PumpPortal's per-token trade
+ * stream requires a paid API key, but DexScreener indexes pump.fun tokens
+ * (bonding-curve and migrated) and its price is free to poll.
+ */
+export async function fetchPricesSol(
+  mints: string[],
+  signal?: AbortSignal,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (mints.length === 0) return out
+  try {
+    // /latest/dex/tokens accepts up to 30 comma-separated addresses.
+    const data = await getJson<{ pairs?: DsPair[] } | DsPair[]>(
+      `${DEXSCREENER_BASE}/latest/dex/tokens/${mints.slice(0, 30).join(',')}`,
+      signal,
+    )
+    const pairs = Array.isArray(data) ? data : (data.pairs ?? [])
+    // Keep the deepest-liquidity solana pair per base mint.
+    const best = new Map<string, DsPair>()
+    for (const p of pairs) {
+      if (p.chainId !== 'solana') continue
+      const mint = p.baseToken.address
+      const prev = best.get(mint)
+      if (!prev || (p.liquidity?.usd ?? 0) > (prev.liquidity?.usd ?? 0)) {
+        best.set(mint, p)
+      }
+    }
+    for (const [mint, p] of best) {
+      const quoteIsSol = p.quoteToken.address === SOL_MINT
+      const price =
+        quoteIsSol && p.priceNative ? Number(p.priceNative) : undefined
+      if (price != null && Number.isFinite(price) && price > 0) {
+        out.set(mint, price)
+      }
+    }
+  } catch {
+    /* transient — caller retries next tick */
+  }
+  return out
+}
+
 type NewTokenHandler = (t: TokenEvent) => void
 
 export class DexScreenerPoller {

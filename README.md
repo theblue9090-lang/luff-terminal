@@ -27,8 +27,13 @@ can react in milliseconds.
     price/liquidity.
 - **Auto-snipe** — automatically buy any new token that passes your filters
   (max dev-buy, min liquidity, max open positions).
-- **Auto take-profit / stop-loss** — held positions are tracked in real time via
-  the PumpPortal per-token trade stream and auto-sold when your TP/SL triggers.
+- **Live position PnL** — held-position prices are polled from DexScreener
+  (~5s, free, no key) so PnL keeps moving after a buy. Set
+  `VITE_PUMPPORTAL_API_KEY` to additionally get PumpPortal's real-time per-token
+  trade stream (that stream is metered and needs a key; polling is the key-free
+  default).
+- **Auto take-profit / stop-loss** — positions are auto-sold when your TP/SL
+  triggers, driven by the same live price updates.
 - **No-confirmation auto-buy** — the embedded wallet signs every buy/sell
   *silently* (`showWalletUIs: false`), so auto-snipe fires with **zero popups**.
   A one-click **⚡ Hands-free** toggle additionally *delegates* the wallet

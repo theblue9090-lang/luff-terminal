@@ -15,6 +15,7 @@ import {
   BLOCKED_MINTS,
   DEX_MAX_AGE_MIN,
   FEE_BUFFER_SOL,
+  PUMPPORTAL_HAS_KEY,
   RPC_ENDPOINT,
   SNIPEABLE_POOLS,
   wsFromHttp,
@@ -23,9 +24,12 @@ import {
 import type { Position, TokenEvent } from '../types'
 import { useStore } from '../state/store'
 import { pumpPortal, type TradeUpdate } from '../lib/pumpportal'
-import { DexScreenerPoller } from '../lib/dexscreener'
+import { DexScreenerPoller, fetchPricesSol } from '../lib/dexscreener'
 import { confirmSignature, executeTrade, type SignFn } from '../lib/trade'
 import { fmtSol, shortAddr } from '../lib/format'
+
+/** Position states that are live and need price/PnL tracking. */
+const LIVE_STATES = new Set(['open', 'buying', 'selling'])
 
 function passesFilters(t: TokenEvent, cfg: SnipeConfig): boolean {
   if (cfg.maxDevBuySol > 0 && t.devBuySol != null && t.devBuySol > cfg.maxDevBuySol) {
@@ -471,6 +475,55 @@ export function useSniper(): SniperApi {
     return () => clearInterval(id)
   }, [address, refreshBalance])
 
+  // Live PnL for held positions. PumpPortal's per-token trade stream needs a
+  // paid API key, so we poll DexScreener prices for every open position — this
+  // is what keeps PnL moving after a buy without any key. (When a PumpPortal
+  // key IS set, onTrade also updates prices in real time; both are harmless.)
+  useEffect(() => {
+    const ac = new AbortController()
+    const poll = async () => {
+      const g = useStore.getState()
+      const live = g.positions.filter((p) => LIVE_STATES.has(p.status))
+      if (live.length === 0) return
+      const mints = [...new Set(live.map((p) => p.mint))]
+      const prices = await fetchPricesSol(mints, ac.signal)
+      if (prices.size === 0) return
+      const s = useStore.getState()
+      for (const p of s.positions) {
+        if (!LIVE_STATES.has(p.status)) continue
+        const price = prices.get(p.mint)
+        if (price == null) continue
+        const patch: Partial<Position> = { lastPriceSol: price }
+        if (p.entryPriceSol == null) {
+          patch.entryPriceSol = price
+          if (p.tokenAmount == null && price > 0) {
+            patch.tokenAmount = p.investedSol / price
+          }
+        }
+        s.updatePosition(p.id, patch)
+
+        // Poll-driven TP/SL (fallback when there's no real-time trade stream).
+        if (p.status !== 'open' || !s.config.autoManage) continue
+        const entry = p.entryPriceSol ?? patch.entryPriceSol
+        if (!entry) continue
+        const pnl = ((price - entry) / entry) * 100
+        if (pnl >= p.takeProfitPct) {
+          s.log('info', `TP ${pnl.toFixed(1)}% ${p.symbol || shortAddr(p.mint)}`)
+          void sellPosition(p.id, 'take-profit')
+        } else if (pnl <= -p.stopLossPct) {
+          s.log('info', `SL ${pnl.toFixed(1)}% ${p.symbol || shortAddr(p.mint)}`)
+          void sellPosition(p.id, 'stop-loss')
+        }
+      }
+    }
+    void poll()
+    const id = setInterval(() => void poll(), 5000)
+    return () => {
+      clearInterval(id)
+      ac.abort()
+    }
+  }, [sellPosition])
+
   const start = useCallback(() => {
     const g = useStore.getState()
     if (g.running) return
@@ -480,6 +533,12 @@ export function useSniper(): SniperApi {
     }
     g.setRunning(true)
     g.log('system', 'ENGINE START — scanning pump.fun + dexscreener')
+    g.log(
+      'info',
+      PUMPPORTAL_HAS_KEY
+        ? 'position PnL: real-time PumpPortal trade stream'
+        : 'position PnL: DexScreener price polling (~5s) — set VITE_PUMPPORTAL_API_KEY for real-time',
+    )
     pumpPortal.connect()
     pumpPortal.subscribeNewTokens()
     dexPoller.current?.start()
