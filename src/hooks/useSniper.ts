@@ -12,9 +12,11 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Connection, PublicKey } from '@solana/web3.js'
 import { useSolanaWallets, useSignTransaction } from '@privy-io/react-auth/solana'
 import {
+  BLOCKED_MINTS,
+  DEX_MAX_AGE_MIN,
   FEE_BUFFER_SOL,
-  RPC_ENDPOINT,
-  RPC_WS_ENDPOINT,
+  SNIPEABLE_POOLS,
+  wsFromHttp,
   type SnipeConfig,
 } from '../config'
 import type { Position, TokenEvent } from '../types'
@@ -36,6 +38,31 @@ function passesFilters(t: TokenEvent, cfg: SnipeConfig): boolean {
     return false
   }
   return true
+}
+
+/**
+ * DexScreener token-profiles is a promotions feed, not a new-launch feed, so
+ * only auto-snipe entries that enrichment confirms are on a snipeable pool AND
+ * genuinely fresh — this avoids `trade-local 400` on established tokens.
+ */
+function isDexSnipeable(t: TokenEvent): boolean {
+  if (!SNIPEABLE_POOLS.has(t.pool)) return false
+  if (t.pairCreatedAt == null) return false
+  return Date.now() - t.pairCreatedAt < DEX_MAX_AGE_MIN * 60_000
+}
+
+/** Turn a raw trade error into an actionable one-liner. */
+function errorHint(msg: string): string {
+  if (/403|forbidden/i.test(msg)) {
+    return ' — RPC rejected the send. Set a working RPC in the ⚙ RPC field (the public endpoint blocks sends).'
+  }
+  if (/trade-local 400|bad request/i.test(msg)) {
+    return ' — token not snipeable on this pool (already migrated, or not a pump/raydium token).'
+  }
+  if (/timed out|timeout/i.test(msg)) {
+    return ' — request timed out; check your RPC/network.'
+  }
+  return ''
 }
 
 export interface SniperApi {
@@ -63,13 +90,15 @@ export function useSniper(): SniperApi {
     ) ?? wallets[0]
   const address = wallet?.address
 
+  // RPC is runtime-configurable; the connection rebuilds when the user changes it.
+  const rpcUrl = useStore((s) => s.rpcUrl)
   const connection = useMemo(
     () =>
-      new Connection(RPC_ENDPOINT, {
+      new Connection(rpcUrl, {
         commitment: 'confirmed',
-        wsEndpoint: RPC_WS_ENDPOINT,
+        wsEndpoint: wsFromHttp(rpcUrl),
       }),
-    [],
+    [rpcUrl],
   )
 
   // Keep the latest signer / address in refs so hot-path callbacks stay stable.
@@ -195,10 +224,9 @@ export function useSniper(): SniperApi {
           })
           .finally(() => inFlight.current.delete(key))
       } catch (e) {
-        useStore
-          .getState()
-          .updatePosition(posId, { status: 'open', error: (e as Error).message })
-        useStore.getState().log('error', `SELL error: ${(e as Error).message}`)
+        const msg = (e as Error).message
+        useStore.getState().updatePosition(posId, { status: 'open', error: msg })
+        useStore.getState().log('error', `SELL error: ${msg}${errorHint(msg)}`)
         inFlight.current.delete(key)
       }
     },
@@ -347,8 +375,9 @@ export function useSniper(): SniperApi {
       } catch (e) {
         // Build/sign/send never landed a tx: untrack and refund the cap.
         const s = useStore.getState()
-        s.updatePosition(posId, { status: 'failed', error: (e as Error).message })
-        s.log('error', `BUY error: ${(e as Error).message}`)
+        const msg = (e as Error).message
+        s.updatePosition(posId, { status: 'failed', error: msg })
+        s.log('error', `BUY error: ${msg}${errorHint(msg)}`)
         removeMapping(token.mint, posId)
         pumpPortal.unwatchTrades(token.mint)
         s.addSpend(-invested)
@@ -399,11 +428,15 @@ export function useSniper(): SniperApi {
 
   const onNewToken = useCallback(
     (t: TokenEvent) => {
+      // Never surface or trade base assets / stables that can't be sniped.
+      if (BLOCKED_MINTS.has(t.mint)) return
       const s = useStore.getState()
       s.pushToken(t)
-      if (s.running && s.config.autoSnipe && passesFilters(t, s.config)) {
-        void snipe(t, true)
-      }
+      if (!s.running || !s.config.autoSnipe) return
+      if (!passesFilters(t, s.config)) return
+      // DexScreener entries must be fresh + on a snipeable pool to auto-buy.
+      if (t.source === 'dexscreener' && !isDexSnipeable(t)) return
+      void snipe(t, true)
     },
     [snipe],
   )

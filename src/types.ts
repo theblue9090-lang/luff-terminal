@@ -34,6 +34,8 @@ export interface TokenEvent {
   vTokensInBondingCurve?: number
   /** Liquidity in USD (dexscreener). */
   liquidityUsd?: number
+  /** Pair creation time (ms) from dexscreener, used to gate freshness. */
+  pairCreatedAt?: number
   /** Metadata / image URI when available. */
   uri?: string
 }

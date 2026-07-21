@@ -100,6 +100,7 @@ export async function enrichMint(
       pool: dexToPool(best.dexId),
       priceSol: Number.isFinite(priceSol) ? priceSol : undefined,
       liquidityUsd: best.liquidity?.usd,
+      pairCreatedAt: best.pairCreatedAt,
       marketCapSol: undefined,
     }
   } catch {

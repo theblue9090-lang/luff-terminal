@@ -54,6 +54,39 @@ export const DEXSCREENER_BASE: string =
 export const SOL_MINT = 'So11111111111111111111111111111111111111112'
 
 /**
+ * Mints that are never snipeable new coins (base assets / stables / LSTs).
+ * The DexScreener token-profiles feed can surface these — buying them just
+ * returns `trade-local 400`, so we drop them from detection entirely.
+ */
+export const BLOCKED_MINTS = new Set<string>([
+  SOL_MINT,
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+  'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So', // mSOL
+  'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn', // jitoSOL
+  '7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1Y7ARj', // stSOL
+  '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', // RAY
+  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN', // JUP
+])
+
+/** Pools PumpPortal can actually build a snipe trade for. */
+export const SNIPEABLE_POOLS = new Set<string>([
+  'pump',
+  'pump-amm',
+  'raydium',
+  'raydium-cpmm',
+  'launchlab',
+  'bonk',
+])
+
+/**
+ * Max age (minutes) for a DexScreener-sourced token to still be auto-sniped.
+ * token-profiles is a promotions feed, not a new-launch feed, so we only
+ * auto-buy pairs that enrichment confirms are genuinely fresh.
+ */
+export const DEX_MAX_AGE_MIN = 15
+
+/**
  * Headroom kept aside on every buy for the base signature fee + a little rent,
  * so a snipe is never attempted with a balance that can't cover fees.
  */
@@ -66,6 +99,64 @@ export const BUILD_TIMEOUT_MS = 3000
 export const SOLANA_CLUSTERS = [
   { name: 'mainnet-beta' as const, rpcUrl: RPC_ENDPOINT },
 ]
+
+/** The public endpoint rejects transaction sends — used to warn the user. */
+export const PUBLIC_RPC = 'https://api.mainnet-beta.solana.com'
+
+/** Derive a WebSocket RPC URL from an HTTP(S) one. */
+export function wsFromHttp(url: string): string | undefined {
+  if (RPC_WS_ENDPOINT) return RPC_WS_ENDPOINT
+  try {
+    const u = new URL(url)
+    u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:'
+    return u.toString()
+  } catch {
+    return undefined
+  }
+}
+
+const RPC_STORAGE_KEY = 'luff.rpcUrl'
+
+/** Load the user's saved RPC override, falling back to the env/default. */
+export function loadRpcUrl(): string {
+  try {
+    return localStorage.getItem(RPC_STORAGE_KEY) || RPC_ENDPOINT
+  } catch {
+    return RPC_ENDPOINT
+  }
+}
+
+/** Persist the user's RPC override (empty string clears it). */
+export function saveRpcUrl(url: string): void {
+  try {
+    if (url) localStorage.setItem(RPC_STORAGE_KEY, url)
+    else localStorage.removeItem(RPC_STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+const CONFIG_STORAGE_KEY = 'luff.config'
+
+/** Persist the snipe config so settings survive reloads. */
+export function saveConfig(cfg: SnipeConfig): void {
+  try {
+    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(cfg))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Load persisted snipe config merged over defaults. */
+export function loadConfig(defaults: SnipeConfig): SnipeConfig {
+  try {
+    const raw = localStorage.getItem(CONFIG_STORAGE_KEY)
+    if (!raw) return defaults
+    return { ...defaults, ...(JSON.parse(raw) as Partial<SnipeConfig>) }
+  } catch {
+    return defaults
+  }
+}
 
 /** Default snipe parameters — user-tunable at runtime in the UI. */
 export const DEFAULT_SNIPE = {

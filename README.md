@@ -71,6 +71,16 @@ Open the printed localhost URL, click **CONNECT WITH PRIVY**, and a Solana
 embedded wallet is created for you automatically. **Fund that wallet's address
 with SOL** (shown in the header), tune your config, then press **START ENGINE**.
 
+### ⚠️ Set a real RPC first (fixes `broadcast failed: 403`)
+
+The public RPC (`api.mainnet-beta.solana.com`) **blocks transaction sends** and
+returns `403 Access forbidden`, so buys can't broadcast. Paste a paid RPC into
+the **⚙ SOLANA RPC ENDPOINT** field at the top of the config panel (or run
+`rpc <url>` in the command bar) and press **save** — it's stored in your browser
+and applied immediately, no rebuild needed. Get a free/paid key from
+[Helius](https://helius.dev), [QuickNode](https://quicknode.com), or
+[Triton](https://triton.one). You can also set `VITE_SOLANA_RPC` in `.env.local`.
+
 ### Hands-free (no-confirmation) trading
 
 Buys and sells never show a confirmation popup — the app configures the Privy
