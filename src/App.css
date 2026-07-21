@@ -299,13 +299,76 @@
 }
 
 /* ============================ dashboard ============================ */
-.dash {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
+.dash-wrap {
+  display: flex;
   gap: 10px;
+  align-items: stretch;
 }
+
+/* prominent unrealized PnL + ROI widget */
+.dash-hero {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 22px;
+  box-shadow: var(--shadow);
+  flex-shrink: 0;
+}
+.hero-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hero-roi {
+  align-items: flex-start;
+}
+.hero-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 4px 0;
+}
+.hero-k {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.hero-val {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  color: var(--text);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hero-roi .hero-val {
+  font-size: 22px;
+}
+
+.dash-stats {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
 @media (max-width: 1100px) {
-  .dash {
+  .dash-wrap {
+    flex-direction: column;
+  }
+  .dash-hero {
+    justify-content: space-between;
+  }
+  .dash-stats {
     grid-auto-flow: column;
     grid-template-columns: none;
     grid-auto-columns: minmax(140px, 1fr);

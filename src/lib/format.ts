@@ -35,6 +35,25 @@ export function fmtSolSigned(n?: number, digits = 4): string {
   return `${sign}${fmtSol(Math.abs(n), digits)}`
 }
 
+/** USD amount with a +/- sign and 2 decimals, for PnL display. */
+export function fmtUsdSigned(n?: number): string {
+  if (n == null || Number.isNaN(n)) return '—'
+  const sign = n >= 0 ? '+' : '-'
+  return `${sign}$${Math.abs(n).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
+/** Plain 2-decimal number (no currency symbol), signed only when negative. */
+export function fmtNum2(n?: number): string {
+  if (n == null || Number.isNaN(n)) return '—'
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 export function fmtTime(ts: number): string {
   const d = new Date(ts)
   return d.toLocaleTimeString('en-US', { hour12: false }) +
