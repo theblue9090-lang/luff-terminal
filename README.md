@@ -102,14 +102,13 @@ send spray.
 
 ### Hands-free (no-confirmation) trading
 
-Buys and sells never show a confirmation popup — the app configures the Privy
-embedded wallet with `showWalletUIs: false`, so signing is silent by design.
-For an explicit, one-time authorization, click **⚡ HANDS-FREE** in the header:
-this *delegates* your embedded wallet via Privy's headless delegation so the
-sniper is authorized to transact on your behalf and will never ask again. Click
-it again any time to revoke. Delegation is optional — silent signing works
-without it — but it's the cleanest way to guarantee zero interruptions during
-auto-snipe.
+Buys and sells **never show a confirmation popup** — the app configures the Privy
+embedded wallet with `showWalletUIs: false` and passes it on every signature, so
+signing is silent by design. On top of that, hands-free is **auto-enabled on
+login**: the moment your embedded wallet is ready it is *delegated* (Privy
+headless delegation), so auto-snipe fires with zero confirmation and no clicking
+required. The **⚡ HANDS-FREE** button in the header shows the state and lets you
+revoke; a manual revoke is remembered so it won't silently re-enable.
 
 ## Configuration
 
