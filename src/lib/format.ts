@@ -28,6 +28,13 @@ export function fmtPct(n?: number): string {
   return `${sign}${n.toFixed(1)}%`
 }
 
+/** SOL amount with an explicit +/- sign, for PnL display. */
+export function fmtSolSigned(n?: number, digits = 4): string {
+  if (n == null || Number.isNaN(n)) return '—'
+  const sign = n >= 0 ? '+' : '-'
+  return `${sign}${fmtSol(Math.abs(n), digits)}`
+}
+
 export function fmtTime(ts: number): string {
   const d = new Date(ts)
   return d.toLocaleTimeString('en-US', { hour12: false }) +

@@ -1,5 +1,6 @@
 import { useSniper } from '../hooks/useSniper'
 import { Header } from './Header'
+import { Dashboard } from './Dashboard'
 import { ConfigPanel } from './ConfigPanel'
 import { FeedPanel } from './FeedPanel'
 import { PositionsPanel } from './PositionsPanel'
@@ -12,6 +13,7 @@ export function Terminal() {
   return (
     <div className="app">
       <Header api={api} />
+      <Dashboard />
       <div className="grid">
         <div className="col">
           <ConfigPanel />

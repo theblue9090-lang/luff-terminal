@@ -40,6 +40,10 @@ can react in milliseconds.
 - **Safety rails** — per-buy balance check, a session spend cap, a max-open-
   positions limit, and duplicate-buy guards so a runaway feed can't drain the
   wallet.
+- **PnL dashboard** — a live stats strip (total / realized / unrealized PnL,
+  open value, win rate, best & worst trade, session spend) plus a positions
+  panel with per-position PnL in % and SOL, entry→current price, and an
+  open / history split.
 - **Terminal UX** — live feed, positions with PnL, console log, and a command
   bar (`buy`, `sell`, `set`, `auto on/off`, `start/stop`, `closeall`).
 

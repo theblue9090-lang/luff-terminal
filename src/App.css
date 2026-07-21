@@ -269,6 +269,98 @@
   background: var(--green);
 }
 
+/* ============================ dashboard ============================ */
+.dash {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+@media (max-width: 1100px) {
+  .dash {
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-auto-columns: minmax(130px, 1fr);
+    overflow-x: auto;
+  }
+}
+.dash-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dash-k {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.dash-v {
+  font-size: 17px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-sub {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+/* ============================ position cards ============================ */
+.pos-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.012);
+}
+.pos-card:hover {
+  border-color: var(--border);
+}
+.pos-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pos-sym {
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pnl-big {
+  font-size: 16px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.pos-mid {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 12px;
+}
+.pos-bot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+.pos-err {
+  margin-top: 5px;
+  color: var(--red);
+  word-break: break-word;
+}
+
 /* ============================ feed / positions tables ============================ */
 .row {
   display: grid;
