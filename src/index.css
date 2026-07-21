@@ -1,0 +1,108 @@
+:root {
+  --bg: #050807;
+  --bg-panel: #0a0f0d;
+  --bg-panel-2: #0d1512;
+  --border: #163a2b;
+  --border-soft: #0f251c;
+  --green: #22e07a;
+  --green-dim: #1f9d5c;
+  --green-faint: #0e5c37;
+  --amber: #f5b342;
+  --red: #ff5c5c;
+  --cyan: #38d6d6;
+  --text: #b8f5d4;
+  --text-dim: #5f8f78;
+  --text-faint: #3a5c4c;
+  --mono: 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas',
+    'Liberation Mono', monospace;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* subtle scanline / crt vibe */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 20, 10, 0.18) 3px
+  );
+  z-index: 9999;
+  opacity: 0.35;
+}
+
+a {
+  color: var(--cyan);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: var(--mono);
+  cursor: pointer;
+}
+
+input,
+select {
+  font-family: var(--mono);
+}
+
+::selection {
+  background: var(--green-faint);
+  color: #fff;
+}
+
+/* scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--green-faint);
+}
+
+.blink {
+  animation: blink 1s step-start infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.glow {
+  text-shadow: 0 0 6px rgba(34, 224, 122, 0.5);
+}
