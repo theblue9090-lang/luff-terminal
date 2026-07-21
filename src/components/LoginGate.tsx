@@ -1,4 +1,5 @@
 import { usePrivy } from '@privy-io/react-auth'
+import { Logo } from './Logo'
 
 export function LoginGate() {
   const { ready, login } = usePrivy()
@@ -6,6 +7,9 @@ export function LoginGate() {
   return (
     <div className="login-wrap">
       <div className="login-box">
+        <div className="login-logo">
+          <Logo size={44} wordmark={false} />
+        </div>
         <h1 className="glow">LUFF·SNIPER</h1>
         <div className="sub">solana new-coin sniper terminal · mainnet</div>
 

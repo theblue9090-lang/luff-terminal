@@ -101,6 +101,23 @@
   align-items: center;
   gap: 12px;
 }
+.logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.logo-img {
+  border-radius: 7px;
+  object-fit: cover;
+  display: block;
+  border: 1px solid var(--border);
+}
+.login-logo {
+  margin-bottom: 12px;
+}
+.login-logo .logo-img {
+  border-radius: 12px;
+}
 .brand .logo {
   color: var(--green);
   font-weight: 800;

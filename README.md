@@ -179,6 +179,13 @@ CORS headers); the Vite dev proxy under `/pp` and `/ds` is used only in `npm run
 React 19 · TypeScript · Vite · Zustand · `@privy-io/react-auth` (Solana embedded
 wallets) · `@solana/web3.js` · PumpPortal local trading API · DexScreener API.
 
+## Custom logo
+
+The brand mark defaults to an original straw-hat icon. To use your own image,
+drop a square `public/logo.png` (or `.svg`) — the header and login screen pick
+it up automatically, falling back to the straw hat if it's missing. Use art you
+have the rights to.
+
 ## Disclaimer
 
 This is experimental software that moves real money on a live blockchain. There

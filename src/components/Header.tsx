@@ -4,6 +4,7 @@ import { fmtSol, shortAddr } from '../lib/format'
 import type { FeedStatus } from '../types'
 import type { SniperApi } from '../hooks/useSniper'
 import { HandsFreeToggle } from './HandsFreeToggle'
+import { Logo } from './Logo'
 
 function StatusDot({ status, label }: { status: FeedStatus; label: string }) {
   return (
@@ -29,7 +30,7 @@ export function Header({ api }: { api: SniperApi }) {
   return (
     <div className="topbar">
       <div className="brand">
-        <span className="logo glow">LUFF·SNIPER</span>
+        <Logo />
         <span className="tag">solana mainnet</span>
         <span style={{ display: 'flex', gap: 12, marginLeft: 12 }}>
           <StatusDot status={pumpStatus} label="pump.fun" />
