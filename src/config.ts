@@ -176,7 +176,7 @@ export function wsFromHttp(url: string): string | undefined {
 
 const CONFIG_STORAGE_KEY = 'luff.config'
 const CONFIG_VERSION_KEY = 'luff.configVersion'
-const CONFIG_VERSION = 2
+const CONFIG_VERSION = 3
 
 /** Persist the snipe config so settings survive reloads. */
 export function saveConfig(cfg: SnipeConfig): void {
@@ -194,10 +194,17 @@ export function loadConfig(defaults: SnipeConfig): SnipeConfig {
     if (!raw) return defaults
     const cfg = { ...defaults, ...(JSON.parse(raw) as Partial<SnipeConfig>) }
     const v = Number(localStorage.getItem(CONFIG_VERSION_KEY) || '1')
-    if (v < 2) {
-      // The dev-buy filter was never a requested filter and its old default (2)
-      // silently blocked otherwise-eligible auto-buys — disable it once.
-      cfg.maxDevBuySol = 0
+    if (v < CONFIG_VERSION) {
+      if (v < 2) {
+        // The dev-buy filter was never requested and its old default (2)
+        // silently blocked otherwise-eligible auto-buys — disable it once.
+        cfg.maxDevBuySol = 0
+      }
+      if (v < 3) {
+        // Bump the detection filter to the requested $4k mcap / $2k liquidity.
+        cfg.minMarketCapUsd = 4000
+        cfg.minLiquidityUsd = 2000
+      }
       try {
         localStorage.setItem(CONFIG_VERSION_KEY, String(CONFIG_VERSION))
         localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(cfg))
@@ -231,11 +238,11 @@ export const DEFAULT_SNIPE = {
   maxOpenPositions: 3,
   /** Reject tokens whose initial dev buy (SOL) exceeds this. 0 = no cap (off). */
   maxDevBuySol: 0,
-  /** Only detect tokens with market cap at least this (USD). 0 = no min. */
-  minMarketCapUsd: 3000,
-  /** Only detect tokens with market cap at most this (USD). 0 = no max. */
+  /** Only auto-snipe tokens with market cap at least this (USD). 0 = no min. */
+  minMarketCapUsd: 4000,
+  /** Only auto-snipe tokens with market cap at most this (USD). 0 = no max. */
   maxMarketCapUsd: 0,
-  /** Only detect tokens with at least this liquidity (USD). 0 = no min. */
+  /** Only auto-snipe tokens with at least this liquidity (USD). 0 = no min. */
   minLiquidityUsd: 2000,
   /** Cumulative SOL this session may spend on buys. 0 = unlimited. */
   maxSpendSol: 1,
